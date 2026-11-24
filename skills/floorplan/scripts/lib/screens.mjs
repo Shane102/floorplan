@@ -15,9 +15,8 @@
 // (flat + nested routes), Nuxt, Astro, Expo Router, Shopify theme templates; Inertia pages come from scan.mjs
 // (routes.mjs inertiaLinks), as hints on the controller that renders them.
 
-import fs from 'node:fs';
 import path from 'node:path';
-import { blankBlockComments, importStatements } from './common.mjs';
+import { blankBlockComments, importStatements, readProjectText } from './common.mjs';
 
 const P = path.posix;
 const JS_LANGS = new Set(['typescript', 'javascript', 'vue', 'svelte', 'astro']);
@@ -428,8 +427,7 @@ export function buildScreens({ graph, scan, root }) {
   const srcCache = new Map();
   const lines = (p) => {
     if (srcCache.has(p)) return srcCache.get(p);
-    let v = null;
-    try { if (root) v = fs.readFileSync(path.join(root, p), 'utf8').split('\n'); } catch {}
+    const v = root ? readProjectText(root, p)?.split('\n') ?? null : null;
     srcCache.set(p, v);
     return v;
   };

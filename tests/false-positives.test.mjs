@@ -124,7 +124,7 @@ test('the page applies the same rule as the build', () => {
   for (const piece of [`d.severity && d.severity !== issue.severity`, `String(loc).replace(/:[^:]*$/, '')`, `left.get(l.file) || 0`]) assert.ok(ui.includes(piece), piece);
 });
 
-test('a report opens a GitHub issue for the person to send, and carries no code, fix prompt or detail', () => {
+test('a report previews locally and links to a blank GitHub issue', () => {
   const ui = fs.readFileSync(new URL('../skills/floorplan/assets/ui/20-health.js', import.meta.url), 'utf8');
   const report = /const reportText = [\s\S]*?\.join\('\\n'\);/.exec(ui)[0];
   assert.ok(!/issue\.(fix|detail|notes)/.test(report), report);
@@ -137,8 +137,9 @@ let root, server, base, token;
 const NOTE = 'that value is only a sample, see the wiki';
 const dataOf = (html) => JSON.parse(/<script>window\.FLOORPLAN = (.*?);<\/script>/s.exec(html)[1]);
 const mapFile = (name) => path.join(root, 'floorplan', name);
-const call = (method, body, headers = { 'x-floorplan-token': token }) => fetch(base + '/api/health/dismissed', { method, headers: { 'content-type': 'application/json', ...headers }, ...(body ? { body: JSON.stringify(body) } : {}) });
-const exportPage = async (include) => (await fetch(base + '/api/export', { method: 'POST', headers: { 'content-type': 'application/json', 'x-floorplan-token': token }, body: JSON.stringify({ include }) })).text();
+// A synchronous rebuild can outlast the HTTP idle timeout while the test process is blocked.
+const call = (method, body, headers = { 'x-floorplan-token': token }) => fetch(base + '/api/health/dismissed', { method, headers: { connection: 'close', 'content-type': 'application/json', ...headers }, ...(body ? { body: JSON.stringify(body) } : {}) });
+const exportPage = async (include) => (await fetch(base + '/api/export', { method: 'POST', headers: { connection: 'close', 'content-type': 'application/json', 'x-floorplan-token': token }, body: JSON.stringify({ include }) })).text();
 
 before(async () => {
   root = shopApp();

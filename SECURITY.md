@@ -2,18 +2,16 @@
 
 ## Reporting a vulnerability
 
-Please report security problems privately through GitHub: open the repository's **Security** tab and choose **Report a vulnerability**. Don't open a public issue.
+Please use the fork's private vulnerability reporting form for security issues. [Report a vulnerability](https://github.com/Shane102/floorplan/security/advisories/new)
 
 Helpful details:
 - what the problem is, and what someone could do with it;
 - the steps to reproduce it;
 - which version of Floorplan you're on (see `.claude-plugin/plugin.json`).
 
-You'll get a reply within a few days. Once a fix is out, you'll be credited unless you'd rather not be.
-
 ## What the plugin can do
 
-[Is it safe to install?](docs/is-it-safe.md) lists everything Floorplan does on your computer: its one outbound request, every program it runs, and what it never does. [`tests/supply-chain.test.mjs`](tests/supply-chain.test.mjs) enforces that on every push and pull request, and each release's `CHECKSUMS.txt` lets you confirm an installed copy matches it (`node tools/checksums.mjs --check <folder>`).
+The installation guide describes what Floorplan runs locally, when Claude Code or Codex sends data, and how to compare an installed copy with the fork using `CHECKSUMS.txt`. [Is it safe to install?](docs/is-it-safe.md)
 
 ## Scope
 
@@ -26,4 +24,4 @@ Out of scope: issues in Claude Code itself, which go to [Anthropic](https://www.
 
 ## Supported versions
 
-Only the latest release gets security fixes.
+Security fixes are made on the fork's `main` branch.

@@ -50,13 +50,14 @@ after(async () => {
   cleanup(root);
 });
 
-test('the map has health, recent work, a note, a flow and a remote to leave out', () => {
+test('the local map has health, recent work, a note and a flow, and omits Git remotes', () => {
   const g = dataOf(fs.readFileSync(path.join(root, 'floorplan', 'index.html'), 'utf8'));
   assert.ok(g.health.issues.length > 0);
   assert.equal(g.recent.items.length, 1);
   assert.ok(g.files.some((f) => f.note));
   assert.equal(g.flows.length, 1);
   assert.ok(g.meta.root);
+  assert.ok(g.meta.repos.every((r) => !('remote' in r)));
 });
 
 test('by default the export keeps flows and notes, and leaves out health, recent work and this computer', () => {

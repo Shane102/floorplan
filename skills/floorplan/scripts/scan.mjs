@@ -9,9 +9,10 @@
 // "summary". In unattended mode a repo git can't list, or finding no files at all, is an error (exit 1).
 
 import fs from 'node:fs';
+import { writeMapFile } from '../assets/map-files.mjs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { discover, listGitFiles, explainGitError, gitInfo, classify, themeRoots, toPosix, parseArgs, fmtNum, HARD_IGNORE_DIRS, MAP_DIR, LEGACY_MAP_DIR, isMapDir, mapDir, keepOutOfGit, unattendedMode, printJson, skippedConfigs, MAX_CONFIG_BYTES, readJsonFile, notMapped } from './lib/common.mjs';
+import { discover, listGitFiles, explainGitError, gitInfo, classify, themeRoots, toPosix, parseArgs, fmtNum, HARD_IGNORE_DIRS, MAP_DIR, LEGACY_MAP_DIR, isMapDir, mapDir, keepOutOfGit, unattendedMode, printJson, skippedConfigs, MAX_CONFIG_BYTES, readJsonFile, notMapped, projectFile, readProjectText } from './lib/common.mjs';
 import { extract, callableCallsVia, phpPages } from './lib/extract.mjs';
 import { findIssues } from './lib/health.mjs';
 import { findScreens } from './lib/screens.mjs';
@@ -81,10 +82,9 @@ if (unattended && problems.length) {
 const files = [];
 const themes = themeRoots(fileList.map((f) => f.path));
 for (const { path: p, repo } of fileList) {
-  const abs = path.join(root, p);
-  let st;
-  try { st = fs.statSync(abs); } catch { continue; }
-  if (!st.isFile()) continue;
+  const entry = projectFile(root, p);
+  if (!entry) continue;
+  const { file: abs, stat: st } = entry;
   const { category, lang } = classify(p, st.size, { themes });
   const f = { path: p, repo, category, lang, bytes: st.size, loc: 0 };
   if ((category === 'code' || category === 'config' || category === 'docs') && st.size <= maxBytes) {
@@ -173,8 +173,8 @@ const wrappers = new Map(files.filter((f) => f.callableWrappers).map((f) => [f.p
 if (wrappers.size) for (const f of files) {
   const via = (f.imports || []).flatMap((imp) => Object.entries(imp.locals || {}).filter(([, orig]) => imp.files?.some((t) => wrappers.get(t)?.has(orig))).map(([local]) => local));
   if (!via.length) continue;
-  let src;
-  try { src = fs.readFileSync(path.join(root, f.path), 'utf8'); } catch { continue; }
+  const src = readProjectText(root, f.path, maxBytes);
+  if (src === null) continue;
   for (const local of via) f.calls = [...(f.calls || []), ...callableCallsVia(src, local)];
 }
 
@@ -183,13 +183,13 @@ if (wrappers.size) for (const f of files) {
 phpPages(files);
 const routes = resolveRoutes(files);
 // Serverless Framework: endpoints declared in serverless.yml, placed in the file that answers them (lib/serverless.mjs)
-const serverless = serverlessRoutes(files, (p) => { try { return fs.readFileSync(path.join(root, p), 'utf8'); } catch { return ''; } });
+const serverless = serverlessRoutes(files, (p) => readProjectText(root, p, maxBytes) ?? '');
 routes.push(...serverless.routes);
 // Supabase Edge Functions: each one's address under /functions/v1 (lib/supabase-functions.mjs)
-const edge = edgeFunctionRoutes(files, routes, (p) => { try { return fs.readFileSync(path.join(root, p), 'utf8'); } catch { return ''; } });
+const edge = edgeFunctionRoutes(files, routes, (p) => readProjectText(root, p, maxBytes) ?? '');
 const http = matchCalls(files, routes);
 // Laravel: Wayfinder's named routes and controller actions, and the Inertia page each endpoint opens
-const wayfinderLinks = matchWayfinder(files, routes, (p) => { try { return fs.readFileSync(path.join(root, p), 'utf8'); } catch { return ''; } });
+const wayfinderLinks = matchWayfinder(files, routes, (p) => readProjectText(root, p, maxBytes) ?? '');
 const inertia = inertiaLinks(files, routes);
 http.push(...wayfinderLinks, ...inertia.http);
 const fileAt = new Map(files.map((f) => [f.path, f]));
@@ -225,7 +225,7 @@ const scan = {
   hosts,
 };
 fs.mkdirSync(path.dirname(outFile), { recursive: true });
-fs.writeFileSync(outFile, JSON.stringify(scan));
+writeMapFile(outFile, JSON.stringify(scan));
 if (!args.out) keepOutOfGit(outDir);
 
 function dedupeExt(list) {

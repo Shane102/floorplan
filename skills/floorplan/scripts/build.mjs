@@ -8,12 +8,14 @@
 // "report". Exits 1 on errors either way, and still prints the object if the build stops on something unexpected.
 
 import fs from 'node:fs';
+import { assertMapDirectory, writeMapFile } from '../assets/map-files.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compileGlob, globProblem, parseArgs, fmtNum, mapDir, keepOutOfGit, toPosix, unattendedMode, printJson, readJsonFile, notMapped } from './lib/common.mjs';
 import { fallbackFileName, fallbackRouteName, routeKey, jargonIn } from './lib/names.mjs';
 import { buildHealth, withDismissed, dismissalFor, maskSecrets } from './lib/health.mjs';
-import { scriptJson, scriptCode, withPolicy, editorTemplate } from '../assets/page-safety.mjs';
+import { withPolicy, editorTemplate } from '../assets/page-safety.mjs';
+import { createViewer, graphQuerySource } from '../assets/render-viewer.mjs';
 import { buildPlanHealth } from './lib/blueprint.mjs';
 import { buildScreens } from './lib/screens.mjs';
 import { writeClaudeMd } from './lib/claudemd.mjs';
@@ -566,7 +568,7 @@ const graph = {
     audience, agent,
     ...(editor.template ? { editor: editor.template } : {}),
     ...(scan.blueprint ? { blueprint: { source: scan.blueprint.source, stack: scan.blueprint.stack, assumptions: scan.blueprint.assumptions } } : {}),
-    repos: scan.repos.map(({ path: p, name, branch, head, remote }) => ({ path: p, name, branch, head, remote })),
+    repos: scan.repos.map(({ path: p, name, branch, head }) => ({ path: p, name, branch, head })),
     counts: { files: included.length, loc: included.reduce((s, f) => s + f.loc, 0), unassigned: unassigned.length },
   },
   project: arch.project,
@@ -613,61 +615,32 @@ if (graph.health?.issues && fs.existsSync(dismissedFile)) {
     graph.health = withDismissed(graph.health, list);
     for (const w of secretWarnings()) { warn(w); report.push(`! ${w}`); } } catch (e) { warn(`health-dismissed.json is not valid JSON: ${e.message}`); }
 }
+assertMapDirectory(outDir);
 fs.mkdirSync(outDir, { recursive: true });
 const trackedWarning = keepOutOfGit(outDir);
-fs.writeFileSync(path.join(outDir, 'graph.json'), JSON.stringify(graph, null, 0));
+writeMapFile(path.join(outDir, 'graph.json'), JSON.stringify(graph, null, 0));
 
-const template = fs.readFileSync(path.join(SKILL_DIR, 'assets', 'viewer.html'), 'utf8');
-// The layout engine (elkjs 0.9.3) and fonts (Inter, JetBrains Mono) are bundled in assets/vendor/ and
-// inlined, so the map makes no outside requests and works offline.
-const vendor = path.join(SKILL_DIR, 'assets', 'vendor');
-const elkTag = `<script>${scriptCode(fs.readFileSync(path.join(vendor, 'elk.bundled.js'), 'utf8'))}</script>`;
-const FONT_RANGES = {
-  latin: 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD',
-  'latin-ext': 'U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF',
-};
-const fontCss = [['Inter', 'inter'], ['JetBrains Mono', 'jetbrains-mono']].flatMap(([family, file]) => Object.entries(FONT_RANGES).map(([subset, range]) =>
-  `@font-face{font-family:"${family}";font-style:normal;font-display:swap;font-weight:100 900;unicode-range:${range};src:url(data:font/woff2;base64,${fs.readFileSync(path.join(vendor, 'fonts', `${file}-${subset}-wght-normal.woff2`)).toString('base64')}) format("woff2")}`)).join('\n');
-const graphQuery = fs.readFileSync(path.join(SKILL_DIR, 'assets', 'graph-query.js'), 'utf8');
-// Code goes in through scriptCode and the map's data through scriptJson (assets/page-safety.mjs), and the data
-// goes in last, so nothing in it can be taken for one of the page's own placeholders.
-const page = (g) => template
-  .replace('/*__GRAPH_QUERY__*/', () => scriptCode(graphQuery))
-  .replace('<!--__ELK_SCRIPT__-->', () => elkTag)
-  .replace('/*__FONTS__*/', () => fontCss)
-  .replace(/__FLOORPLAN_TITLE__/g, () => escapeHtml(`${arch.project.name} map`))
-  .replace(/__FLOORPLAN_LOGO__/g, () => dataUri('logo.png'))
-  .replace(/__FLOORPLAN_FAVICON__/g, () => dataUri('favicon.png'))
-  .replace('<!--__UI_EXTENSIONS__-->', () => uiScripts)
-  .replace('/*__FLOORPLAN_DATA__*/null', () => scriptJson(g));
-const uiDir = path.join(SKILL_DIR, 'assets', 'ui');
-const uiScripts = fs.existsSync(uiDir) ? fs.readdirSync(uiDir).filter((n) => n.endsWith('.js')).sort().map((n) => `<script>/* ui/${n} */\n${scriptCode(fs.readFileSync(path.join(uiDir, n), 'utf8'))}</script>`).join('\n') : '';
+const assetDir = path.join(SKILL_DIR, 'assets');
+const page = createViewer(assetDir);
 // the map on disk (and as serve.mjs serves it): only its own scripts run, and it talks to nothing but its own
 // local server. The copy for the Claude app (--artifact) gets none: the app runs its own code in that page.
 const html = withPolicy(page(graph), 'local');
-fs.writeFileSync(path.join(outDir, 'index.html'), html);
+writeMapFile(path.join(outDir, 'index.html'), html);
 // --artifact: a copy to publish to the Claude app, without this machine's absolute path (editor links)
 // (and without the reasons on dismissed health issues, which are notes to self)
 const sharedHealth = graph.health?.dismissed ? { ...graph.health, dismissed: graph.health.dismissed.map(({ reason, ...d }) => d) } : graph.health;
-if (args.artifact) fs.writeFileSync(path.join(outDir, 'artifact.html'), page({ ...graph, ...(sharedHealth ? { health: sharedHealth } : {}), meta: { ...graph.meta, root: null, agent: 'claude' } }));
+if (args.artifact) writeMapFile(path.join(outDir, 'artifact.html'), page({ ...graph, ...(sharedHealth ? { health: sharedHealth } : {}), meta: { ...graph.meta, root: null, agent: 'claude' } }));
 // Self-contained helpers next to the map: ask questions through the Claude Code CLI or Codex (serve.mjs)
-// and the graph lookups it hands to them (query.mjs). They need only Node, not this skill.
-fs.writeFileSync(path.join(outDir, 'query.mjs'), `${graphQuery}
+// and the manual query.mjs lookup. They can run with Node even if the skill was moved.
+writeMapFile(path.join(outDir, 'query.mjs'), `${graphQuerySource(assetDir)}
 // ---- cli ----
 ${fs.readFileSync(path.join(SKILL_DIR, 'assets', 'query-cli.mjs'), 'utf8')}`);
-// Written fresh, not copied: a copy keeps the original's permissions, so a skill installed read-only left
-// read-only files here and the next build couldn't replace them. Removing first replaces one left that way.
-for (const name of ['serve.mjs', 'page-safety.mjs']) {
-  const bytes = fs.readFileSync(path.join(SKILL_DIR, 'assets', name));
-  fs.rmSync(path.join(outDir, name), { force: true });
-  fs.writeFileSync(path.join(outDir, name), bytes);
+// Write fresh runtime files so the map is independent of the plugin cache permissions.
+for (const name of ['serve.mjs', 'page-safety.mjs', 'graph-query.mjs', 'server-state.mjs', 'map-files.mjs', 'render-viewer.mjs']) {
+  const source = fs.readFileSync(path.join(SKILL_DIR, 'assets', name), 'utf8');
+  const bytes = name === 'serve.mjs' ? source.replace('/*__INSTALLED_SKILL_DIR__*/ null', () => JSON.stringify(SKILL_DIR)) : source;
+  writeMapFile(path.join(outDir, name), bytes);
 }
-// a blueprint can be changed from the map: serve.mjs redraws it with this skill's plan.mjs and build.mjs
-if (scan.blueprint) { fs.mkdirSync(path.join(outDir, '.cache'), { recursive: true }); fs.writeFileSync(path.join(outDir, '.cache', 'skill.json'), JSON.stringify({ dir: SKILL_DIR })); }
-// the logo and tab icon are inlined so the map stays one self-contained file
-function dataUri(name) { return 'data:image/png;base64,' + fs.readFileSync(path.join(SKILL_DIR, 'assets', name)).toString('base64'); }
-function escapeHtml(s) { return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
-
 const hs = graph.health?.summary;
 if (hs && (hs.high || hs.medium || hs.low)) {
   report.push(`${scan.blueprint ? 'DESIGN REVIEW' : 'HEALTH'}  ${hs.high} important · ${hs.medium} worth fixing · ${hs.low} minor`);

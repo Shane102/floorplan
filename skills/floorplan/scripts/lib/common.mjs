@@ -1,5 +1,6 @@
 // Shared helpers: paths, globs, file classification, git, and codebase discovery.
 import fs from 'node:fs';
+import { assertMapDirectory, writeMapFile } from '../../assets/map-files.mjs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
@@ -130,6 +131,25 @@ export const HARD_IGNORE_DIRS = new Set([
 /** The folder the map lives in, at the codebase root. Maps made before the rename used show-code/. */
 export const MAP_DIR = 'floorplan';
 export const LEGACY_MAP_DIR = 'show-code';
+
+/** Validate a project-relative source path before using it to read a regular file. */
+export function projectFile(root, relative) {
+  if (typeof relative !== 'string' || path.isAbsolute(relative) || relative.split('/').includes('..') ||
+      relative.includes('\\') || /^[a-z]:/i.test(relative)) return null;
+  try {
+    const base = fs.realpathSync(root);
+    const file = path.resolve(base, relative);
+    if (!file.startsWith(base.endsWith(path.sep) ? base : base + path.sep) || fs.realpathSync(file) !== file) return null;
+    const stat = fs.lstatSync(file);
+    return stat.isFile() ? { file, stat } : null;
+  } catch { return null; }
+}
+
+export function readProjectText(root, relative, maxBytes = Infinity) {
+  const entry = projectFile(root, relative);
+  if (!entry || entry.stat.size > maxBytes) return null;
+  try { return fs.readFileSync(entry.file, 'utf8'); } catch { return null; }
+}
 /** True for a folder holding a map, so a project's own folder that happens to be called "floorplan" isn't taken for one. */
 export const isMapDir = (d) => ['architecture.json', 'plan.json', 'graph.json', '.cache'].some((f) => fs.existsSync(path.join(d, f)));
 /**
@@ -141,7 +161,7 @@ export function keepOutOfGit(dir) {
   const gi = path.join(dir, '.gitignore');
   const want = '# Floorplan keeps its map out of git: this ignores everything in this folder, this file included.\n*\n';
   fs.mkdirSync(dir, { recursive: true });
-  try { if (!fs.existsSync(gi) || fs.readFileSync(gi, 'utf8') !== want) fs.writeFileSync(gi, want); } catch {}
+  try { if (readProjectText(dir, '.gitignore') !== want) writeMapFile(gi, want); } catch {}
   const tracked = (git(dir, ['ls-files', '--', '.']) || '').split('\n').filter(Boolean);
   if (!tracked.length) return null;
   const rel = path.basename(dir);
@@ -155,7 +175,10 @@ export function keepOutOfGit(dir) {
 export function mapDir(root, { migrate = !isUnattended() } = {}) {
   const dir = path.join(root, MAP_DIR);
   const old = path.join(root, LEGACY_MAP_DIR);
+  assertMapDirectory(dir);
   if (migrate && !fs.existsSync(dir) && isMapDir(old)) {
+    assertMapDirectory(old);
+    assertMapDirectory(path.join(old, '.cache'));
     fs.renameSync(old, dir);
     console.error(`(moved the existing map from ${LEGACY_MAP_DIR}/ to ${MAP_DIR}/)`);
   }
@@ -163,6 +186,7 @@ export function mapDir(root, { migrate = !isUnattended() } = {}) {
     console.error(`✗ ${MAP_DIR}/ already exists here and isn't a map (it's part of the project). Pass --out <folder> to put the map somewhere else.`);
     process.exit(1);
   }
+  assertMapDirectory(path.join(dir, '.cache'));
   return dir;
 }
 /** Extra directories skipped when walking outside of git (where .gitignore can't help). */
@@ -197,7 +221,7 @@ export function classify(relPath, bytes, { themes } = {}) {
 export function gitRun(cwd, args) {
   const pre = isUnattended() ? ['--no-optional-locks'] : [];
   try {
-    return { out: execFileSync('git', [...pre, '-C', cwd, ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }).trimEnd(), error: null };
+    return { out: execFileSync('git', [...pre, '-c', 'core.fsmonitor=false', '-C', cwd, ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GIT_NO_LAZY_FETCH: '1' } }).trimEnd(), error: null };
   } catch (e) {
     if (e.code === 'ENOENT') return { out: null, error: 'git is not installed, or not on PATH' };
     const said = String(e.stderr || '').split('\n').map((l) => l.trim()).filter(Boolean);
@@ -219,8 +243,7 @@ export function explainGitError(error, dir) {
 export function gitInfo(dir) {
   const head = git(dir, ['rev-parse', 'HEAD']);
   const branch = git(dir, ['rev-parse', '--abbrev-ref', 'HEAD']);
-  const remote = git(dir, ['config', '--get', 'remote.origin.url']);
-  return { head, branch, remote: remote ? remote.replace(/\/\/[^@/]+@/, '//') : null };
+  return { head, branch };
 }
 
 /** Files git considers part of the repo: tracked + untracked-but-not-ignored. */
@@ -232,7 +255,7 @@ export function gitFiles(dir) {
 export function listGitFiles(dir) {
   const { out, error } = gitRun(dir, ['ls-files', '-co', '--exclude-standard', '-z']);
   if (out == null) return { files: null, error };
-  return { files: [...new Set(out.split('\0').filter(Boolean))].map(toPosix), error: null };
+  return { files: [...new Set(out.split('\0').filter(Boolean))], error: null };
 }
 
 /** If dir/.git is a file pointing into another repo's worktrees/, return that repo's working dir. */

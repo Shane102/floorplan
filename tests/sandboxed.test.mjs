@@ -305,10 +305,11 @@ test('links that open a new window are left to the browser where storage works, 
   assert.deepEqual(click({ persistent: false, button: 1 }), { prevented: false, opened: [] }, 'a middle-click is the browser\'s');
 });
 
-test('every new window in the page goes through openWindow, except the Health report where storage works, which is unchanged', () => {
+test('programmatic windows use openWindow, and Health reports only link to a blank issue', () => {
   const rest = html.replace(helpersSource(), '');
   const opens = [...rest.matchAll(/window\.open\([^)]*\)/g)].map((m) => m[0]);
-  assert.deepEqual(opens, ["window.open(url, '_blank', 'noopener')"], 'open new windows with openWindow() (SC.openWindow in ui/*.js), which shows the address when the browser blocks the window');
-  assert.match(rest, /if \(SC\.store\.persistent === false && SC\.openWindow\) opened = SC\.openWindow\(url, \{ quiet: true \}\);/);
-  assert.match(rest, /if \(report && !opened\) SC\.showAddress\(url\);/, 'a blocked report shows its address once the dismissal is saved');
+  assert.deepEqual(opens, [], 'use openWindow() so a blocked popup shows its address');
+  assert.match(rest, /const ISSUES_URL = 'https:\/\/github\.com\/Shane102\/floorplan\/issues\/new';/);
+  assert.match(rest, /href="\$\{ISSUES_URL\}" target="_blank" rel="noopener noreferrer"/);
+  assert.match(rest, /SC\.copy\(preview\.textContent\)/);
 });

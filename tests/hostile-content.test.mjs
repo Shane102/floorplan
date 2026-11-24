@@ -18,6 +18,33 @@ const H = `<!--<script> </script><ScRiPt >--> &amp; <img src=x onerror=1> ${LS}$
 /** A random-looking key in a well-known format, assembled now. */
 const fakeKey = () => ['sk', 'live', crypto.randomBytes(18).toString('base64').replace(/[^A-Za-z0-9]/g, '').padEnd(24, 'Q7')].join('_');
 
+test('scan skips a tracked symlink and build replaces a linked output without modifying its target', (t) => {
+  const root = makeProject({ 'src/app.js': 'export const app = 1;\n' }, { repos: ['.'], arch: {
+    project: { name: 'Sample' }, nodes: [{ id: 'app', label: 'App', kind: 'service', paths: ['src/**'] }],
+  } });
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'floorplan-links-'));
+  const target = path.join(outside, 'marker.js');
+  const marker = 'export const outsideProject = true;\n';
+  try {
+    fs.writeFileSync(target, marker);
+    try { fs.symlinkSync(target, path.join(root, 'src', 'linked.js'), 'file'); }
+    catch (e) { if (process.platform === 'win32' && e.code === 'EPERM') return t.skip('Windows symlink privileges unavailable'); throw e; }
+    execFileSync('git', ['-C', root, 'add', 'src/linked.js']);
+    run('scan.mjs', root);
+    const scan = readJson(path.join(root, 'floorplan', '.cache', 'scan.json'));
+    assert.ok(scan.files.some((file) => file.path === 'src/app.js'));
+    assert.ok(!scan.files.some((file) => file.path === 'src/linked.js'));
+    const graphFile = path.join(root, 'floorplan', 'graph.json');
+    fs.symlinkSync(target, graphFile, 'file');
+    run('build.mjs', root, '--no-claude-md');
+    assert.ok(!fs.lstatSync(graphFile).isSymbolicLink());
+    assert.equal(fs.readFileSync(target, 'utf8'), marker);
+  } finally {
+    cleanup(root);
+    cleanup(outside);
+  }
+});
+
 /** The data block of a page: its body parsed as the JSON it holds, or a reason it can't be. */
 async function dataOf(html) {
   const { scriptBlocks } = await pageSafety();

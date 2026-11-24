@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- The Shane102 fork uses the `floorplan-shane102` marketplace and removes the Floorplan Cloud sign-up.
+- The map uses lookup code from the installed plugin for Ask, and copies optional Health reports to your clipboard for review and manual submission.
+- The local server serves only the viewer and its token-protected API, and reopens and stops maps through authenticated loopback requests. Scans skip linked source files, and generated map files replace linked output entries safely.
+- Updated the bundled layout engine to the elkjs 0.11.1 security release. [Release notes](https://github.com/kieler/elkjs/releases/tag/0.11.1)
+
+Earlier entries describe upstream releases.
+
 ## 0.11.0 (2026-11-16)
 
 - **Serverless Framework endpoints are on the map:** a backend whose endpoints are declared in `serverless.yml` rather than in code showed none, so the website's requests to it weren't connected and Health skipped its sign-in check. Endpoints now come from each function's `http` and `httpApi` events (`path` and `method`, `any` and `*`, and the short `http: GET /orders` form) in `serverless.yml`, `serverless-*.yml` and `serverless_*.yml`, including function lists split across files included with `${file(./functions.yml)}`. Each endpoint sits in the file its `handler:` names (`src/orders.create` is `create` in `src/orders.ts`), followed through a file that re-exports it, or into another file's function when the handler only passes the request on to it (`(event) => withEvent(event, options, orders.create)`). Health counts an `authorizer`, `private: true` (an API key) or a sign-in check handed to the wrapper as protecting an endpoint, and still reads the handler for a check of its own. CloudFormation tags (`!Ref`, `!GetAtt`, `!Sub`), `${opt:…}` and `${self:…}` variables and anchors are read without trouble, and the scan summary lists schedules, queues, streams and other background functions for a worker node. Sample configs in test folders add no endpoints. Reported and fixed by @ShehanEk in #131 and #132.
@@ -204,7 +213,7 @@
 
 ## 0.2.0 (2026-10-28)
 
-- **Works in Codex:** Floorplan is now a Codex plugin too, with the same skill, map and Health check, on your ChatGPT sign-in and with no API keys. Install it from the Codex app with no terminal: **Plugins → Add a marketplace →** `haydenschmitty/floorplan`, then install Floorplan. See [Floorplan in Codex](docs/codex.md).
+- **Works in Codex:** Floorplan is now a Codex plugin too, with the same skill, map and Health check, on your ChatGPT sign-in and with no API keys. See [Floorplan in Codex](docs/codex.md).
 - **Ask through Codex:** in a map made with Codex, the Ask bar runs your own Codex on your computer, in its read-only sandbox, and these runs stay out of your Codex history. Follow-up questions keep the conversation. The map's server uses whichever agent made the map, and falls back to the other one if only that one is installed (`--engine claude|codex` picks one).
 - **Says who it's working with:** the Ask bar, the Health panel's "Fix with Claude" or "Fix with Codex" prompts, and request-a-flow all name the agent that made the map. In Codex, Floorplan leaves your project's notes alone (there's no Codex equivalent of the personal `CLAUDE.local.md`).
 - **Docs** cover both apps throughout, with a new [Floorplan in Codex](docs/codex.md) guide.
@@ -224,11 +233,11 @@
 ## 0.1.3 (2026-10-28)
 
 - **Works offline, no outside requests:** the map's layout engine (elkjs) and fonts are now bundled into it instead of loaded from jsDelivr and Google Fonts. Maps get this on their next update.
-- The waitlist service's code is no longer part of the plugin download. It stays readable in the repo's history, linked from [Privacy and security](docs/privacy-and-security.md#floorplan-cloud-waitlist).
+- The waitlist service's code is no longer part of the plugin download. The code remains in upstream history.
 
 ## 0.1.2 (2026-10-27)
 
-- **Floorplan Cloud waitlist:** once a map has been open for two minutes, a corner card asks, once, whether you'd like an email when Floorplan Cloud (shared, synced team maps) launches. Nothing is sent unless you click **Notify me**, and then only your email and "just me" or "with my team". **Use my Claude email** fills in your Claude account's address, and you see it before anything is sent. **Don't ask again**, or `FLOORPLAN_NO_PROMPTS=1`, turns it off. See [Privacy and security](docs/privacy-and-security.md#floorplan-cloud-waitlist).
+- **Floorplan Cloud waitlist:** once a map has been open for two minutes, a corner card asks, once, whether you'd like an email when Floorplan Cloud (shared, synced team maps) launches. Nothing is sent unless you click **Notify me**, and then only your email and "just me" or "with my team". **Use my Claude email** fills in your Claude account's address, and you see it before anything is sent. **Don't ask again**, or `FLOORPLAN_NO_PROMPTS=1`, turns it off.
 - The waitlist service's code is in `services/waitlist/`: rate-limited per IP address and overall, write-only, and capped.
 
 ## 0.1.1 (2026-10-27)

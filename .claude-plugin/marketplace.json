@@ -1,11 +1,11 @@
 {
-  "name": "floorplan",
+  "name": "floorplan-shane102",
   "owner": {
-    "name": "Hayden Smith",
-    "url": "https://github.com/haydenschmitty"
+    "name": "Shane102",
+    "url": "https://github.com/Shane102"
   },
   "metadata": {
-    "description": "Floorplan: an interactive map of your codebase for Claude Code."
+    "description": "Floorplan (Shane102): an interactive map of your codebase for Claude Code."
   },
   "plugins": [
     {

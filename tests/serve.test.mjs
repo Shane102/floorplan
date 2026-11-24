@@ -5,15 +5,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { shopApp, scanAndBuild, cleanup } from './helpers.mjs';
+import { spawn, execFileSync } from 'node:child_process';
+import { shopApp, scanAndBuild, cleanup, SKILL } from './helpers.mjs';
 
 let root, server, base, token;
 before(async () => {
   root = shopApp();
   scanAndBuild(root);
   const port = 20000 + Math.floor(Math.random() * 20000);
-  // no Claude Code or Codex CLI and no waitlist card: this only exercises the server itself
+  // No provider CLI: this only exercises the server itself.
   server = spawn(process.execPath, [path.join(root, 'floorplan', 'serve.mjs'), '--port', String(port), '--no-open'], {
     cwd: root, env: { ...process.env, FLOORPLAN_CLAUDE: path.join(root, 'no-such-cli'), FLOORPLAN_CODEX: path.join(root, 'no-such-cli'), FLOORPLAN_NO_PROMPTS: '1' }, stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -84,7 +84,53 @@ test('files outside the map folder are never served', async () => {
   }
 });
 
+test('only the map and its API are served, including with a valid API token', async () => {
+  fs.writeFileSync(path.join(root, 'floorplan', 'notes.html'), '<p>Local notes</p>');
+  for (const p of ['/.cache/server.json', '/graph.json', '/notes.html', '/serve.mjs', '/api/cloud/prompt']) {
+    assert.equal((await api(p, { headers: { 'x-floorplan-token': token } })).status, 404, p);
+  }
+  const page = await fetch(base + '/index.html');
+  assert.equal(page.status, 200);
+  assert.equal(page.headers.get('content-security-policy'), "frame-ancestors 'none'");
+  assert.equal((await api('/api/stop', { method: 'POST' })).status, 403);
+});
+
 test('a malformed address gets an error, and the server keeps running', async () => {
   assert.equal((await fetch(base + '/%E0%A4%A')).status, 400);
   assert.equal((await fetch(base + '/')).status, 200);
+});
+
+test('open starts the installed server and manual stop authenticates to it', async () => {
+  const project = shopApp();
+  const open = path.join(SKILL, 'scripts', 'open.mjs');
+  const generated = path.join(project, 'floorplan', 'serve.mjs');
+  const installed = path.join(SKILL, 'assets', 'serve.mjs');
+  const stateFile = path.join(project, 'floorplan', '.cache', 'server.json');
+  const env = { ...process.env, FLOORPLAN_CLAUDE: path.join(project, 'no-claude'), FLOORPLAN_CODEX: path.join(project, 'no-codex') };
+  const run = (script, ...args) => execFileSync(process.execPath, [script, ...args], { cwd: project, env, encoding: 'utf8' });
+  try {
+    scanAndBuild(project);
+    const source = fs.readFileSync(generated);
+    fs.writeFileSync(generated, '// This copy is unavailable.\n');
+    fs.writeFileSync(path.join(project, 'floorplan', 'index.html'), '<p>Old map page</p>');
+    const opened = run(open, project, '--no-open', '--port', '0');
+    const address = /http:\/\/127\.0\.0\.1:\d+/.exec(opened)?.[0];
+    assert.ok(address);
+    const response = await fetch(address);
+    assert.equal(response.status, 200);
+    const html = await response.text();
+    assert.match(html, /window\.FLOORPLAN_SERVER=/);
+    assert.doesNotMatch(html, /Old map page/);
+    const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    assert.equal(state.url, undefined, 'the address is derived from the port');
+    assert.equal(new URL(address).port, String(state.port));
+    assert.match(run(open, project, '--no-open'), new RegExp(address.replaceAll('.', '\\.')));
+    fs.writeFileSync(generated, source);
+    assert.match(run(generated, '--stop'), /Stopped the map server/);
+    for (let tries = 0; tries < 20 && fs.existsSync(stateFile); tries++) await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.ok(!fs.existsSync(stateFile));
+  } finally {
+    if (fs.existsSync(stateFile)) run(installed, '--map-dir', path.dirname(path.dirname(stateFile)), '--stop');
+    cleanup(project);
+  }
 });

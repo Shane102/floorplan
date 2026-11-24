@@ -1,5 +1,5 @@
 // A skill installed read-only: some package managers, system-wide installs and locked-down machines install
-// files nobody may write to. The build puts two of the skill's own files next to the map, and those have to stay
+// files nobody may write to. The build puts the skill's local runtime next to the map, and it has to stay
 // replaceable, or the build after it fails. If this fails, anyone with a read-only install can build a map once
 // and never again.
 import { test } from 'node:test';
@@ -11,7 +11,7 @@ import { execFileSync } from 'node:child_process';
 import { SKILL, makeProject, cleanup } from './helpers.mjs';
 
 // the skill's files the build puts in the map folder
-const PLACED = ['serve.mjs', 'page-safety.mjs'];
+const PLACED = ['serve.mjs', 'page-safety.mjs', 'graph-query.mjs', 'server-state.mjs', 'map-files.mjs', 'render-viewer.mjs'];
 const filesIn = (dir) => fs.readdirSync(dir, { recursive: true, withFileTypes: true }).filter((e) => e.isFile()).map((e) => path.join(e.parentPath ?? e.path, e.name));
 const canWrite = (file) => { try { fs.closeSync(fs.openSync(file, 'r+')); return true; } catch { return false; } };
 const readOnly = (file) => fs.chmodSync(file, 0o444);
@@ -51,7 +51,9 @@ test('a skill installed read-only builds again and again, and what it puts next 
       const name = path.basename(file);
       assert.ok(fs.statSync(file).mode & 0o200, `${when}: floorplan/${name} is writable`);
       assert.ok(canWrite(file), `${when}: floorplan/${name} can be written to`);
-      assert.deepEqual(fs.readFileSync(file), fs.readFileSync(path.join(skill, 'assets', name)), `${when}: floorplan/${name} is the skill's own file`);
+      const source = fs.readFileSync(path.join(skill, 'assets', name), 'utf8');
+      const expected = name === 'serve.mjs' ? source.replace('/*__INSTALLED_SKILL_DIR__*/ null', () => JSON.stringify(fs.realpathSync(skill))) : source;
+      assert.equal(fs.readFileSync(file, 'utf8'), expected, `${when}: floorplan/${name} comes from the installed skill`);
     }
   };
   try {

@@ -13,7 +13,7 @@
   const PLAN = !!SC.graph.meta.blueprint;
   const FIX = PLAN ? 'Resolve' : 'Fix';
   const CHECK = PLAN ? 'design review' : 'health check';
-  const ISSUES_URL = 'https://github.com/haydenschmitty/floorplan/issues/new';
+  const ISSUES_URL = 'https://github.com/Shane102/floorplan/issues/new';
 
   // ---------- "not a problem" ----------
   // Saved by serve.mjs to floorplan/health-dismissed.json (build folds it into graph.health.dismissed);
@@ -146,26 +146,20 @@
       title: 'Not a problem?',
       html: `<p class="hc-hint">Mark “${h(issue.title)}” as a false alarm and it moves to the bottom of the ${CHECK}, out of the count. It comes back if this check finds something new there.</p>
         <textarea class="hc-why" placeholder="Why not? (optional) e.g. that value is a bcrypt hash, not the password" spellcheck="true"></textarea>
-        <label class="hc-rep"><input type="checkbox" class="hc-rep-on"><span>Also tell the Floorplan developer, so the check gets better. This opens a GitHub issue you can read and edit before sending. It includes only what’s shown below, never your code or any values.</span></label>
-        <pre class="hc-prev"></pre>`,
+        <label class="hc-rep"><input type="checkbox" class="hc-rep-on"><span>Preview a report for the Floorplan developer.</span></label>
+        <div class="hc-prev"><pre></pre><button type="button" class="btn hc-copy">Copy report</button> <a href="${ISSUES_URL}" target="_blank" rel="noopener noreferrer">Open a GitHub issue</a></div>`,
       actions: [{ label: 'Mark as not a problem', primary: true, icon: 'check', keepOpen: true, onClick: async (close) => {
         const reason = m.el.querySelector('.hc-why').value.trim();
-        const report = m.el.querySelector('.hc-rep-on').checked;
-        const url = `${ISSUES_URL}?title=${encodeURIComponent(`False positive: ${issue.kind}`)}&body=${encodeURIComponent(reportText(issue, reason))}`;
-        // opened before anything is awaited, while the browser still counts it as the click's; where storage is
-        // refused (often a sandboxed frame, which may block new windows too) a blocked window is noticed, and the
-        // report's address is shown once the dismissal is saved
-        let opened = false;
-        if (report) { if (SC.store.persistent === false && SC.openWindow) opened = SC.openWindow(url, { quiet: true }); else { window.open(url, '_blank', 'noopener'); opened = true; } }
         if (!(await saveDismissal(issue, reason))) return;
         close();
         refresh();
-        SC.toast(report && opened ? 'Marked as not a problem. Thanks for the report.' : 'Marked as not a problem.');
-        if (report && !opened) SC.showAddress(url);
+        SC.toast('Marked as not a problem.');
       } }],
     });
     const why = m.el.querySelector('.hc-why'), on = m.el.querySelector('.hc-rep-on'), prev = m.el.querySelector('.hc-prev');
-    const sync = () => { prev.classList.toggle('on', on.checked); prev.textContent = reportText(issue, why.value.trim()); };
+    const preview = prev.querySelector('pre');
+    const sync = () => { prev.classList.toggle('on', on.checked); preview.textContent = reportText(issue, why.value.trim()); };
+    prev.querySelector('.hc-copy').addEventListener('click', async () => { if (await SC.copy(preview.textContent)) SC.toast('Report copied.'); });
     why.addEventListener('input', sync); on.addEventListener('change', sync);
     why.focus();
   }

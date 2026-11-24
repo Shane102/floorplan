@@ -6,6 +6,7 @@
 // usage: node plan.mjs [root] [--plan <file>]
 
 import fs from 'node:fs';
+import { writeMapFile } from '../assets/map-files.mjs';
 import path from 'node:path';
 import { parseArgs, toPosix, mapDir, keepOutOfGit, readJsonFile } from './lib/common.mjs';
 import { planToScan } from './lib/blueprint.mjs';
@@ -38,7 +39,7 @@ if (warnings.length) { out.push(`! ${warnings.length} warning(s):`); for (const 
 if (errors.length) { console.log(out.join('\n')); console.log('\nFix the errors above and run plan.mjs again.'); process.exit(1); }
 
 fs.mkdirSync(path.dirname(outFile), { recursive: true });
-fs.writeFileSync(outFile, JSON.stringify(scan));
+writeMapFile(outFile, JSON.stringify(scan));
 keepOutOfGit(outDir);
 
 const bp = scan.blueprint;

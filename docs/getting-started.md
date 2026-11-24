@@ -1,7 +1,5 @@
 # Getting started
 
-Prefer to watch? The [walkthrough video](https://youtu.be/NTUUzC7L_NQ) covers installing Floorplan and touring a finished map.
-
 Floorplan works in **Claude Code** and in **Codex**. Making and using a map is the same in both; only installing differs. This guide shows Claude Code, and [Floorplan in Codex](codex.md) has the Codex steps.
 
 ## What you need
@@ -12,13 +10,13 @@ Floorplan works in **Claude Code** and in **Codex**. Making and using a map is t
 
 ## Install
 
-**In Codex**, open **Plugins → Add a marketplace**, enter `haydenschmitty/floorplan`, and install Floorplan. Details in [Floorplan in Codex](codex.md#install).
+**In Codex**, open **Plugins → Add a marketplace**, enter `Shane102/floorplan`, and install **Floorplan (Shane102)**. Details in [Floorplan in Codex](codex.md#install).
 
 **In Claude Code**, run these once, in any terminal:
 
 ```bash
-claude plugin marketplace add haydenschmitty/floorplan
-claude plugin install floorplan@floorplan
+claude plugin marketplace add Shane102/floorplan
+claude plugin install floorplan@floorplan-shane102
 ```
 
 The first command adds this repository as a plugin source. The second installs Floorplan for all your projects. The desktop app and the CLI share the same settings, so it shows up in both.
@@ -26,6 +24,8 @@ The first command adds this repository as a plugin source. The second installs F
 **Start a new session** afterwards. Plugins load when a session starts.
 
 > In the Claude desktop app you can also browse plugins with the **+** button next to the prompt box (**Add plugins**, or **Plugins → Browse plugins**). It lists plugins from marketplaces you've already added.
+
+If you already have a map from an earlier installation, stop its server with `node floorplan/serve.mjs --stop` before rebuilding. Then rebuild with this fork to refresh the generated HTML and server files.
 
 ## Make your first map
 
@@ -97,7 +97,7 @@ For Codex, see [Update or remove it](codex.md#update-or-remove-it).
 In Claude Code, plugins installed from GitHub don't update automatically unless you turn that on. To get the latest version:
 
 ```bash
-claude plugin update floorplan@floorplan
+claude plugin update floorplan@floorplan-shane102
 ```
 
 Or turn on automatic updates: in a Claude Code session, run `/plugin`, open **Marketplaces**, and choose **Enable auto-update**. Either way, updates apply in your next session. See the [changelog](../CHANGELOG.md) for what changed.
@@ -105,7 +105,7 @@ Or turn on automatic updates: in a Claude Code session, run `/plugin`, open **Ma
 ## Remove it
 
 ```bash
-claude plugin uninstall floorplan@floorplan
+claude plugin uninstall floorplan@floorplan-shane102
 ```
 
 In Codex, see [Update or remove it](codex.md#update-or-remove-it). Then delete the `floorplan/` folder (and, if you used Claude Code, the Floorplan section of `CLAUDE.local.md`) from any project you used it in.

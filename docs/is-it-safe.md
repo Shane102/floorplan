@@ -1,35 +1,30 @@
 # Is it safe to install?
 
-Plugins for Claude Code and Codex can run code on your computer, so it's worth asking. Some malicious plugins look harmless when you install them, then download and run something else later (a "stage two"). Floorplan is built so it can't do that, a test checks it on every change, and you can confirm all of it yourself.
+Floorplan is a Claude Code and Codex plugin that runs local Node.js scripts. Its layout engine and fonts are bundled with the plugin. The checks below help you inspect the code and compare your installation with a trusted checkout.
 
-## What Floorplan never does
+## What the plugin contains
 
-- **No hooks.** Hooks run code automatically on events in every session, which makes them a common hiding place. Floorplan has none.
-- **No MCP servers.** Floorplan has none, so it never starts a server that downloads its newest version with `npx`.
-- **No dependencies, no install scripts.** Nothing comes from npm, at install time or ever. Its `package.json` exists only to run the tests.
-- **Never downloads anything, and never runs code from the internet.** No `eval`, no loading code at run time, no encoded payloads.
-- **Never changes your code.** It writes only its own `floorplan/` folder and, in Claude Code and only if you say yes, a marked section of `CLAUDE.local.md`. See [What's in your project](project-files.md).
-- **No analytics or tracking.**
+- Node.js scripts for scanning, building and serving maps. The package manifest defines the test command.
+- Vendored copies of elkjs and fonts with their licenses.
+- A skill and plugin manifests. Installation requires no package dependencies or install scripts. The plugin defines no hooks or MCP servers.
 
-## Everything it does
+## Runtime behavior
 
 ### The network
 
-- **The map's server** (`floorplan/serve.mjs`) listens on `127.0.0.1` only, so other machines can't reach it. It answers only to `127.0.0.1` and `localhost` at its own port, and its API needs a token that only the map page receives.
-- **One outbound request: the Floorplan Cloud waitlist,** sent only if you type your email into the card on the map and click to join. It goes to `floorplan-waitlist-690500262396.us-central1.run.app` and carries your email and "just me" or "with my team". Details in [Privacy and security](privacy-and-security.md#floorplan-cloud-waitlist).
-- **The map page loads nothing from the internet.** Its layout engine and fonts are built into the file. It only links to documentation, which opens when you click.
-- **The page enforces that itself.** Every map carries a Content-Security-Policy: only the page's own scripts run (each is allowed by its SHA-256 hash, computed when the page is written), and images and fonts can only come from inside the file. An **exported copy** may contact nothing at all (`connect-src 'none'`); `floorplan/index.html` and the page the map's server serves may contact only that local server (`connect-src 'self'`), for asking questions, live reload, flows and Export. So even if text from a repository ever slipped past the map's escaping and became script, it couldn't send the map anywhere. The copy made for the Claude app (`--artifact`) has no policy of its own, because the Claude app runs its own code in that page and applies its own rules.
-- **Reporting a false alarm is yours to send.** If you tick the box under **Not a problem** in Health, the map opens a new GitHub issue in your browser with the text filled in, shown to you first. Nothing goes anywhere unless you submit it there.
+- **The map's server** listens on `127.0.0.1` only. It serves the viewer and its API, and it keeps internal files such as scan data and logs off HTTP. Its API requires a token and checks the browser origin.
+- **The map page works offline.** Its layout engine and fonts are bundled in the page.
+- **The viewer limits scripts and background requests.** Its Content Security Policy allows scripts by SHA-256 hash and limits images and fonts to bundled data. Exports block background connections with `connect-src 'none'`. The local viewer uses `connect-src 'self'` for Ask, live reload, flows and Export. The Claude app applies its own rules to the optional copy made with `--artifact`.
+- **Reporting a Health false positive is optional.** The viewer previews the report and can copy it to your clipboard. The link to the fork's issues carries no report text. You decide what to paste and submit.
 
-Asking questions on the map runs Claude Code or Codex, which talk to Anthropic or OpenAI the way they always do, on your account. Floorplan itself sends nothing.
+When you use Ask, Floorplan starts Claude Code or Codex. Those clients connect to their providers using your account and can read project files.
 
 ### The programs it runs
 
 | Program | When | Why |
 |---|---|---|
-| `git` | scan | Read-only: which files are tracked, the current branch and commit, what changed since the last map |
-| `where` (Windows) or `which` | starting the map's server | Finding the Claude Code or Codex CLI |
-| `claude` or `codex` | when you ask a question on the map | Answering it, read-only: `claude -p` limited to reading files and Floorplan's lookup script, or `codex exec --sandbox read-only` |
+| `git` | scan and updates | Read-only commands with the filesystem monitor and lazy fetching disabled |
+| `claude` or `codex` | when you ask a question on the map | Answering it, read-only: `claude -p` limited to reading and searching files, or `codex exec --sandbox read-only` |
 | `node` | throughout | Running Floorplan's own scripts |
 | `cmd /c start`, `open` or `xdg-open` | opening the map | Opening the map's local address in your browser |
 
@@ -43,15 +38,16 @@ In Claude Code, while the skill is in use, it pre-approves one kind of command: 
 
 `skills/floorplan/workflow.json` is data, not code: the same steps as SKILL.md, for people who run Floorplan from their own scripts or CI ([Running without an agent session](unattended.md)). Nothing in Floorplan reads it to decide what to run.
 
-### Three things worth explaining
+### Bundled code and map data
 
-- **`skills/floorplan/assets/vendor/elk.bundled.js`** is a 1.6 MB minified file: the layout engine that arranges the map. It's [elkjs](https://github.com/kieler/elkjs) 0.9.3, byte for byte the same as the official package on npm. Its SHA-256 is `b0745abd7f23cd91690a1587e377edbe19fd7233c783300290936720546216d4`. To check it yourself:
+- **`skills/floorplan/assets/vendor/elk.bundled.js`** is a 1.6 MB minified file: the layout engine that arranges the map. It's [elkjs](https://github.com/kieler/elkjs) 0.11.1, byte for byte the same as the official package on npm. Its SHA-256 is `20dd2114d683ce758b3ce19bcc56e28a504a617b0d280f760407c37314631d0e`. To check it yourself:
   ```bash
-  npm pack elkjs@0.9.3
-  tar -xzf elkjs-0.9.3.tgz package/lib/elk.bundled.js
+  npm pack elkjs@0.11.1
+  tar -xzf elkjs-0.11.1.tgz package/lib/elk.bundled.js
   ```
   Then compare `package/lib/elk.bundled.js` with Floorplan's copy, for example with `sha256sum` (macOS: `shasum -a 256`; Windows PowerShell: `Get-FileHash`).
-- **One `new Function`** in `serve.mjs` loads the map's lookup code from `floorplan/query.mjs`, a file Floorplan's build wrote into your project. It never runs anything from the network.
+- **Ask uses lookup code from the installed plugin.** The server reads the project's graph as JSON data and supplies a lookup summary to the agent.
+- **The scanner skips symbolic links and paths outside the project.** Floorplan writes generated map files by replacing the destination entry, so a linked output cannot redirect writes to its target.
 - **Health reads the middle part of tokens it finds** (it decodes them from base64) to tell what kind of token each is, so it can skip ones that are public by design. It never stores or shows the token itself.
 
 ## Checked on every change
@@ -59,13 +55,13 @@ In Claude Code, while the skill is in use, it pre-approves one kind of command: 
 [`tests/supply-chain.test.mjs`](../tests/supply-chain.test.mjs) runs on every push and pull request, on Linux and Windows (and weekly on macOS). It fails if a change would:
 
 - add a hook, an MCP server, a dependency or an install script;
-- send a request anywhere other than the map's own server and the waitlist;
+- add a network client to the local server or a background request from the viewer to an external service;
 - start a program not in the table above, or start one through a shell;
 - use `eval`, load code at run time, or hide a long encoded string in the code;
 - add a script that would run without asking;
 - change the bundled layout engine, or add a vendored file.
 
-Each check was tested by planting exactly that kind of change and seeing it fail. A change to any of this has to change the test and this page together, in the open.
+See the test for the current checks and their scope.
 
 To run the same checks on your own copy:
 
@@ -73,25 +69,25 @@ To run the same checks on your own copy:
 node --test tests/supply-chain.test.mjs
 ```
 
-## Check that your installed copy is a real release
+## Compare an installed copy with the repository
 
-Every release includes `CHECKSUMS.txt`: a SHA-256 fingerprint of every file the plugin runs from (the skill, the plugin manifests and the marketplace files). To compare your installed copy with the release on GitHub:
+`CHECKSUMS.txt` records SHA-256 fingerprints of the skill, package manifest and plugin and marketplace files. Compare your installed copy with the same fork commit you used to install it.
 
 ```bash
-git clone --depth 1 --branch floorplan--v<version> https://github.com/haydenschmitty/floorplan floorplan-check
-node floorplan-check/tools/checksums.mjs --check <installed folder>
+git clone https://github.com/Shane102/floorplan.git floorplan-check
+git -C floorplan-check checkout COMMIT_OR_TAG
+node floorplan-check/tools/checksums.mjs --check "/path/to/installed/plugin"
 ```
 
-`<version>` is the version you have (`claude plugin list` or `codex plugin list` shows it). The installed folder is:
-- **Claude Code:** `~/.claude/plugins/cache/floorplan/floorplan/<version>`
-- **Codex:** `~/.codex/plugins/cache/floorplan/floorplan/<version>`
+Replace `COMMIT_OR_TAG` with the fork ref you installed. For the default plugin caches, replace `<version>` with the installed version:
+- **Claude Code:** `~/.claude/plugins/cache/floorplan-shane102/floorplan/<version>`
+- **Codex:** `~/.codex/plugins/cache/floorplan-shane102/floorplan/<version>`
 
-It prints either that all files are identical, or which ones changed, are extra or are missing.
+The command reports a match or lists changed, extra and missing files.
 
-## The honest limits
+## Updating
 
-- Claude Code and Codex install a plugin from its repository, and an update brings whatever the newest release contains, for this plugin as for any other. Releases are made only by the maintainer, and `main` is protected: its history can't be rewritten or deleted. Outside pull requests are reviewed before they're run or merged, and the checks above run on every one of them. Before you update, you can read the changes in the [changelog](../CHANGELOG.md) and verify the new version with its checksums.
-- Floorplan works by having Claude or Codex read your code to describe it. That goes to Anthropic or OpenAI under your account, like any other task you give them. See [Privacy and security](privacy-and-security.md).
+A marketplace update uses the code published by that marketplace. Check the source and the changes before installing an update. [Changelog](../CHANGELOG.md)
 
 ## Found something?
 

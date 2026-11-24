@@ -1,4 +1,4 @@
-// Release hygiene: the plugin manifests, the README badge and the changelog agree on the version,
+// Release hygiene: the plugin manifests, the README and the changelog agree on the version,
 // so a release never ships half-bumped.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -36,8 +36,8 @@ test('the Codex marketplace lists this plugin, from this repo', () => {
   assert.deepEqual(entry.source, { source: 'local', path: './' });
 });
 
-test('the README version badge matches plugin.json', () => {
-  assert.match(read('README.md'), new RegExp(`badge/version-${plugin.version.replaceAll('.', '\\.')}-`));
+test('the README version matches plugin.json', () => {
+  assert.ok(read('README.md').includes(`[Version ${plugin.version}](CHANGELOG.md)`));
 });
 
 test('the changelog has an entry for this version', () => {

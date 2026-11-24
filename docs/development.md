@@ -29,16 +29,19 @@ skills/floorplan/
     describe.mjs   worksheets for Claude to name and describe files and endpoints
     refresh.mjs    incremental update: re-scan, carry over, flag changes, rebuild
     recent.mjs     facts for marking recent work
-    open.mjs       start or reuse the map's server, and open the browser
+    open.mjs       start or reuse the installed map server and open the browser
     lib/           extraction, import resolution, Nuxt auto-imports, route matching, Health, screens, which agent is running, helpers
   assets/
     viewer.html    the map (template the build fills in)
-    ui/            viewer extensions: Theme button, blueprints, glossary, Health, recent work, screens, tour, waitlist card
-    graph-query.js shared map lookups (viewer, query.mjs, Ask instructions)
-    serve.mjs      copied into each project's floorplan/ folder; answers through Claude Code or Codex
+    ui/            viewer extensions: Theme button, blueprints, glossary, Health, recent work, screens, tour, export
+    graph-query.mjs  shared lookups for the viewer, server and command line
+    render-viewer.mjs  renders the viewer from installed assets and project data
+    serve.mjs      local map server; the build also copies it to the map folder for manual use
     page-safety.mjs  the one way data and code go into a page's <script> blocks, and its Content-Security-Policy
                    (used by build.mjs, and copied next to serve.mjs)
     query-cli.mjs  becomes floorplan/query.mjs
+    server-state.mjs  local server state and authenticated shutdown; copied next to the generated serve.mjs
+    map-files.mjs  map directory validation and file replacement
     logo.png, favicon.png
     vendor/        bundled layout engine (elkjs) and fonts, with their licenses
 tests/                 regression tests and the sample projects they map
@@ -53,12 +56,12 @@ Install from your local folder instead of GitHub:
 
 ```bash
 claude plugin marketplace add /path/to/floorplan
-claude plugin install floorplan@floorplan
+claude plugin install floorplan@floorplan-shane102
 ```
 
 A plugin installed from a local folder runs straight from it, so edits apply in the next session with no update step.
 
-To try it in Codex, see [Trying a working copy](codex.md#trying-a-working-copy). Codex copies a local plugin when you add it, so run `codex plugin add floorplan@floorplan` again after each change. `--agent claude|codex|none` on build.mjs (or `FLOORPLAN_AGENT`) and `--engine claude|codex` on serve.mjs let you try either agent's map from anywhere.
+To try it in Codex, see [Trying a working copy](codex.md#trying-a-working-copy). Codex copies a local plugin when you add it, so run `codex plugin add floorplan@floorplan-shane102` again after each change. `--agent claude|codex|none` on build.mjs (or `FLOORPLAN_AGENT`) and `--engine claude|codex` on serve.mjs let you try either agent's map from anywhere.
 
 The scripts also run on their own, which is the fastest way to work on them:
 
@@ -129,7 +132,7 @@ The tests use Node's built-in test runner, so there's nothing to install (`npm t
 | `agents.test.mjs` | telling Claude Code from Codex, what a map built by each records and writes, and the name open.mjs gives the program that answers questions (another program answering to the `claude` command is named as itself) |
 | `unattended.test.mjs` | running without an agent session: a small driver follows `workflow.json` through a first map and a refresh with canned answers, using only `--json` and exit codes; the optional plain-language step (reworded, left alone, rejected for changing more than wording, or failed, with the map completing every time); nothing written outside `floorplan/`, a map that names no agent, git failures that fail loudly, the workflow file's names and schemas, `maskSecrets` as a stable export, and no change without unattended mode |
 | `read-only-install.test.mjs` | a skill whose files are read-only builds a map twice, and the files it puts next to the map stay writable, including over read-only ones an earlier version left (skips itself where read-only doesn't stop the user writing) |
-| `release.test.mjs` | the version agrees across both plugins' `plugin.json`, the README badge, the changelog and `CHECKSUMS.txt` |
+| `release.test.mjs` | the version agrees across both plugins' `plugin.json`, the README version link, the changelog and `CHECKSUMS.txt` |
 | `supply-chain.test.mjs` | what the plugin can do stays what [Is it safe to install?](is-it-safe.md) says: no hooks, MCP servers or dependencies, one outbound request, a fixed list of programs and pre-approved scripts, no code loaded at run time, the vendored layout engine unchanged |
 | `touch.test.mjs` | touch gestures: a drag follows one finger and ends on a cancelled touch, two-finger pinch and pan, nothing re-fits the map mid-gesture (checks on the built page, not a real screen) |
 | `sandboxed.test.mjs` | a map whose browser refuses storage, the clipboard or new windows (a sandboxed frame, strict settings): settings kept in memory for the visit, no tour on its own, `#tour=0`, "Copied" only when it was, the address shown when a window is blocked, and nothing changed where storage works (the page's own code run against a pretend browser, not a real frame) |
@@ -196,12 +199,12 @@ An engine must be read-only in a way its CLI enforces, not only because the prom
 
 ### Releasing
 
-1. On an up-to-date `main`, run the tests and check the manifests, including the official plugin directory's requirements:
+1. On an up-to-date `main`, run the tests and validate the manifests:
    ```bash
    npm test
-   claude plugin validate . --profile directory
+   claude plugin validate .
    ```
-2. Bump `version` in `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`, and the version badge in `README.md`.
+2. Bump `version` in `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`, and the version link in `README.md`.
 3. Rename `## Unreleased` in `CHANGELOG.md` to `## X.Y.Z (YYYY-MM-DD)`.
 4. Write the release's fingerprints, after the version bump:
    ```bash
@@ -213,7 +216,7 @@ An engine must be read-only in a way its CLI enforces, not only because the prom
    claude plugin tag . -m "Floorplan %s" --push
    ```
 7. On GitHub, publish a release from the tag (`floorplan--vX.Y.Z`), titled `Floorplan X.Y.Z`, with that version's changelog section as its notes.
-8. Reply on every issue and pull request the release fixes: what changed, the version, and how to get it (`claude plugin update floorplan@floorplan`).
+8. Reply on every issue and pull request the release fixes: what changed, the version, and how to get it (`claude plugin update floorplan@floorplan-shane102`).
 
 ### Issues and pull requests
 

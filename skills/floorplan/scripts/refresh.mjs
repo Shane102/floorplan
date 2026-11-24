@@ -11,6 +11,7 @@
 // it exits 1 when there's no map, the scan fails, or the build fails; otherwise those exit 0 as before.
 
 import fs from 'node:fs';
+import { assertMapDirectory, writeMapFile } from '../assets/map-files.mjs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -139,6 +140,7 @@ for (const k of goneRoutes) {
 
 // ---------- 4. reconcile descriptions ----------
 const descDir = path.join(outDir, 'descriptions');
+assertMapDirectory(descDir);
 let carried = 0, pruned = 0, flagged = 0, routeCarried = 0, routePruned = 0;
 const digestSet = new Set(digestChanged);
 if (fs.existsSync(descDir)) {
@@ -169,13 +171,13 @@ if (fs.existsSync(descDir)) {
     if (changed) {
       const outObj = { files: filesOut, ...(Object.keys(routesOut).length ? { routes: routesOut } : {}) };
       if (!Object.keys(filesOut).length && !Object.keys(routesOut).length) fs.unlinkSync(fp);
-      else fs.writeFileSync(fp, JSON.stringify(outObj, null, 2) + '\n');
+      else writeMapFile(fp, JSON.stringify(outObj, null, 2) + '\n');
     }
   }
 }
 
 // what changed since the last build, for recent.mjs (marking recent work on the map)
-fs.writeFileSync(path.join(outDir, '.cache', 'changes.json'), JSON.stringify({
+writeMapFile(path.join(outDir, '.cache', 'changes.json'), JSON.stringify({
   since: old.meta.generatedAt, at: new Date().toISOString(),
   files: { new: created, edited: edited.filter((p) => !created.includes(p)), moved: [...renames].map(([a, b]) => ({ from: a, to: b })), deleted },
   routes: { new: [...newRoutes], removed: goneRoutes.filter((k) => !routeMoves.has(k)), moved: [...routeMoves].map(([a, b]) => ({ from: a, to: b })) },

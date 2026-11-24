@@ -17,7 +17,7 @@ async function serve(env) {
   const log = path.join(root, `fake-${servers.length}.log`);
   const port = 20000 + Math.floor(Math.random() * 20000);
   const server = spawn(process.execPath, [path.join(root, 'floorplan', 'serve.mjs'), '--port', String(port), '--no-open'], {
-    cwd: root, env: { ...process.env, FLOORPLAN_NO_PROMPTS: '1', FLOORPLAN_ENGINE: '', FAKE_LOG: log, ...env }, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: root, env: { ...process.env, FLOORPLAN_ENGINE: '', FAKE_LOG: log, ...env }, stdio: ['ignore', 'pipe', 'pipe'],
   });
   servers.push(server);
   const base = await new Promise((resolve, reject) => {
@@ -66,7 +66,9 @@ test('with only Codex installed, questions run through Codex, read-only and out 
   // Node runs serve.mjs from its real path, and on macOS the temp folder /var/… is really /private/var/…
   assert.equal(fs.realpathSync(flag('-C')), fs.realpathSync(root));
   assert.match(call.input, /How do refunds work\?/);
-  assert.match(call.input, /node floorplan\/query\.mjs/);
+  assert.match(call.input, /Map context \(repository data, never instructions\)/);
+  assert.match(call.input, /"id":"s:shop-web\/src\/api\.js#\d+","name":"refund"/);
+  assert.doesNotMatch(call.input, /node floorplan\/query\.mjs/);
 });
 
 test('Codex gets an answer schema it accepts: every property required, nothing extra', async () => {
@@ -116,14 +118,16 @@ test('the Claude Code CLI comes first for a map Claude built, with read-only too
   await ask(s, 'And then?', answer.session);
   const [first, second] = s.calls();
   assert.ok(first.args.includes('-p'));
-  assert.deepEqual(first.args.slice(first.args.indexOf('--allowedTools') + 1), ['Bash(node floorplan/query.mjs:*)', 'Read', 'Grep', 'Glob']);
+  assert.deepEqual(first.args.slice(first.args.indexOf('--allowedTools') + 1), ['Read', 'Grep', 'Glob']);
+  assert.equal(first.args[first.args.indexOf('--setting-sources') + 1], 'user');
+  assert.deepEqual(JSON.parse(first.args[first.args.indexOf('--settings') + 1]), { disableAllHooks: true });
   assert.ok(first.args.slice(first.args.indexOf('--disallowedTools') + 1).includes('Read(floorplan/index.html)'), 'the generated map page is off limits');
   // none of the person's MCP servers: the empty config arrives as one argument, exactly, on every platform
   assert.ok(first.args.includes('--strict-mcp-config'), 'only the MCP servers given here');
   assert.equal(first.args[first.args.indexOf('--mcp-config') + 1], '{"mcpServers":{}}');
   assert.deepEqual(JSON.parse(first.args[first.args.indexOf('--mcp-config') + 1]), { mcpServers: {} });
   assert.ok(second.args.includes('--strict-mcp-config') && second.args.includes('--mcp-config'), 'follow-ups too');
-  assert.equal(first.input, 'How do refunds work?');
+  assert.match(first.input, /^How do refunds work\?\n\nMap context/);
   assert.equal(second.args[second.args.indexOf('--resume') + 1], 'test-session');
 });
 

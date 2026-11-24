@@ -12,15 +12,15 @@ Floorplan works in [Codex](https://developers.openai.com/codex) the same way it 
 **In the Codex app** (no terminal needed):
 
 1. Open **Plugins** and choose **Add a marketplace**.
-2. For **Source**, enter `haydenschmitty/floorplan`. Leave **Git ref** empty, and click **Add marketplace**.
-3. Find **Floorplan** in the list and click **+** to install it.
+2. For **Source**, enter `Shane102/floorplan`. Leave **Git ref** empty, and click **Add marketplace**.
+3. Find **Floorplan (Shane102)** in the list and click **+** to install it.
 4. Start a new chat.
 
 **From a terminal**, with the [Codex CLI](https://developers.openai.com/codex/cli):
 
 ```bash
-codex plugin marketplace add haydenschmitty/floorplan
-codex plugin add floorplan@floorplan
+codex plugin marketplace add Shane102/floorplan
+codex plugin add floorplan@floorplan-shane102
 ```
 
 The app and the CLI share their plugins, so installing in one makes Floorplan available in both.
@@ -59,16 +59,16 @@ It finds `codex` on your PATH, and on Windows the CLI that comes with the Codex 
 
 ## Update or remove it
 
-In the app, open **Plugins**, find the Floorplan marketplace and choose **Upgrade** to get the latest version, or **Remove marketplace** to take it out. From a terminal:
+In the app, open **Plugins**, find the **Floorplan (Shane102)** marketplace and choose **Upgrade** to get the latest version, or **Remove marketplace** to take it out. From a terminal:
 
 ```bash
-codex plugin marketplace upgrade floorplan
-codex plugin add floorplan@floorplan
+codex plugin marketplace upgrade floorplan-shane102
+codex plugin add floorplan@floorplan-shane102
 ```
 
 ```bash
-codex plugin remove floorplan@floorplan
-codex plugin marketplace remove floorplan
+codex plugin remove floorplan@floorplan-shane102
+codex plugin marketplace remove floorplan-shane102
 ```
 
 Your maps stay in each project's `floorplan/` folder until you delete them.
@@ -79,7 +79,7 @@ Point Codex at your local clone instead of GitHub:
 
 ```bash
 codex plugin marketplace add /path/to/floorplan
-codex plugin add floorplan@floorplan
+codex plugin add floorplan@floorplan-shane102
 ```
 
-Codex copies a local plugin into its cache when you add it (unlike Claude Code, which runs a local plugin straight from the folder). After you change the plugin, run `codex plugin add floorplan@floorplan` again and start a new session.
+Codex copies a local plugin into its cache when you add it (unlike Claude Code, which runs a local plugin straight from the folder). After you change the plugin, run `codex plugin add floorplan@floorplan-shane102` again and start a new session.

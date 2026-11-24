@@ -6,10 +6,11 @@
 //                      [--editor NAME|LINK]   (the editor "Open in editor" opens, e.g. cursor or "zed://file/{path}:{line}")
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { parseArgs, mapDir, unattendedMode, readJsonFile } from './lib/common.mjs';
+import { fileURLToPath } from 'node:url';
+import { parseArgs, mapDir, unattendedMode } from './lib/common.mjs';
 import { editorTemplate } from '../assets/page-safety.mjs';
+import { readServerState, serverRequest, serverRuntimeHash } from '../assets/server-state.mjs';
 import { cliLabel } from './lib/agent.mjs';
 
 const args = parseArgs(process.argv.slice(2));
@@ -20,12 +21,12 @@ if (unattendedMode(args)) {
   process.exit(0);
 }
 const dir = mapDir(root);
-const serveFile = path.join(dir, 'serve.mjs');
+const serveFile = fileURLToPath(new URL('../assets/serve.mjs', import.meta.url));
 const stateFile = path.join(dir, '.cache', 'server.json');
 const rel = path.relative(process.cwd(), dir).replace(/\\/g, '/') || '.';
 const IDLE_MINUTES = 120;
 
-if (!fs.existsSync(path.join(dir, 'index.html')) || !fs.existsSync(serveFile)) {
+if (!fs.existsSync(path.join(dir, 'index.html')) || !fs.existsSync(path.join(dir, 'graph.json'))) {
   console.error('✗ No built map here yet. Run build.mjs first.');
   process.exit(1);
 }
@@ -35,60 +36,63 @@ const editor = args.editor === undefined ? null : editorTemplate(args.editor ===
 if (editor?.error) { console.error(`✗ --editor ${editor.error}`); process.exit(1); }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const readState = () => { try { return readJsonFile(stateFile); } catch { return null; } };
-const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
-async function api(s, p) {
-  try {
-    const r = await fetch(s.url + p, { headers: { 'x-floorplan-token': s.token }, signal: AbortSignal.timeout(3000) });
-    return r.ok ? await r.json() : null;
-  } catch { return null; }
+const realRoot = fs.realpathSync(root);
+async function readStatus(state) {
+  if (!state) return null;
+  const status = await serverRequest(state, '/api/status');
+  return status?.pid === state.pid && status.root === realRoot ? status : null;
 }
 function openBrowser(u) {
   const [cmd, a] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', u]] : process.platform === 'darwin' ? ['open', [u]] : ['xdg-open', [u]];
   try { spawn(cmd, a, { stdio: 'ignore', detached: true, windowsHide: true }).unref(); return true; } catch { return false; }
 }
-const hash = crypto.createHash('sha1').update(fs.readFileSync(serveFile)).digest('hex').slice(0, 12);
+const hash = serverRuntimeHash(serveFile, path.dirname(serveFile));
 
-let s = readState();
-let status = s?.pid && alive(s.pid) ? await api(s, '/api/status') : null;
+let s = readServerState(stateFile);
+let status = await readStatus(s);
 let restarted = false;
 const hadTabs = status?.tabs > 0;
 
 // a newer serve.mjs came with this build, or a different --editor was asked for: restart so the map gets it;
 // open tabs reconnect and reload
 if (status && (status.hash !== hash || (editor?.template && status.editor !== editor.template))) {
-  try { process.kill(s.pid); } catch {}
-  for (let i = 0; i < 20 && alive(s.pid); i++) await sleep(150);
+  if (await serverRequest(s, '/api/stop', 'POST')) {
+    for (let i = 0; i < 20 && readServerState(stateFile)?.token === s.token; i++) await sleep(150);
+    restarted = true;
+  }
   status = null;
-  restarted = true;
 }
 
 if (!status) {
   const pass = ['port', 'engine', 'model', 'claude', 'codex', 'editor'].flatMap((k) => (args[k] ? ['--' + k, String(args[k])] : []));
   if (!args.port && s?.port) pass.push('--port', String(s.port)); // keep the address people have open
   fs.mkdirSync(path.dirname(stateFile), { recursive: true });
-  const log = fs.openSync(path.join(dir, '.cache', 'server.log'), 'w');
-  const prev = s?.pid;
-  spawn(process.execPath, [serveFile, '--no-open', '--idle-exit', String(IDLE_MINUTES), ...pass], {
-    cwd: root, detached: true, stdio: ['ignore', log, log], windowsHide: true,
-  }).unref();
+  const logFile = path.join(dir, '.cache', 'server.log');
+  fs.rmSync(logFile, { force: true });
+  const log = fs.openSync(logFile, 'wx', 0o600);
+  const prev = s?.token;
+  try {
+    spawn(process.execPath, [serveFile, '--map-dir', dir, '--no-open', '--idle-exit', String(IDLE_MINUTES), ...pass], {
+      cwd: root, detached: true, stdio: ['ignore', log, log], windowsHide: true,
+    }).unref();
+  } finally { fs.closeSync(log); }
   // finding the Claude Code or Codex CLI takes a few seconds before the server listens
   for (let i = 0; i < 100; i++) {
     await sleep(200);
-    const n = readState();
-    if (n?.pid && n.pid !== prev && alive(n.pid)) { s = n; status = await api(s, '/api/status'); if (status) break; }
+    const n = readServerState(stateFile);
+    if (n && n.token !== prev) { s = n; status = await readStatus(s); if (status) break; }
   }
   if (!status) {
     console.error(`✗ The map server didn't start. Its log is in ${rel}/.cache/server.log. The map still opens as a file: ${rel}/index.html`);
     process.exit(1);
   }
   // tabs from before a restart come back on their own within a few seconds
-  if (restarted && hadTabs) for (let i = 0; i < 50 && !(status?.tabs > 0); i++) { await sleep(200); status = await api(s, '/api/status'); }
+  if (restarted && hadTabs) for (let i = 0; i < 50 && !(status?.tabs > 0); i++) { await sleep(200); status = await readStatus(s); }
 }
 
-const health = await api(s, '/api/health');
+const health = await serverRequest(s, '/api/health');
 let shown;
-if (status.tabs > 0) shown = `already open in ${status.tabs === 1 ? 'a browser tab' : status.tabs + ' browser tabs'}, which reloaded with the latest map`;
+if (status?.tabs > 0) shown = `already open in ${status.tabs === 1 ? 'a browser tab' : status.tabs + ' browser tabs'}, which reloaded with the latest map`;
 else if (args['no-open']) shown = 'not opened in a browser (--no-open): open the URL yourself';
 else shown = openBrowser(s.url) ? 'opened in the browser' : 'could not open a browser: open the URL yourself';
 

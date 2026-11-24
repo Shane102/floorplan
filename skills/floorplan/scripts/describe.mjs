@@ -10,8 +10,9 @@
 // Run build.mjs first: worksheets are generated from floorplan/graph.json.
 
 import fs from 'node:fs';
+import { assertMapDirectory, writeMapFile } from '../assets/map-files.mjs';
 import path from 'node:path';
-import { parseArgs, fmtNum, mapDir, toPosix, unattendedMode, printJson, readJsonFile } from './lib/common.mjs';
+import { parseArgs, fmtNum, mapDir, toPosix, unattendedMode, printJson, readJsonFile, readProjectText } from './lib/common.mjs';
 import { fallbackFileName, fallbackRouteName, routeKey } from './lib/names.mjs';
 import { maskSecrets, lineIndex } from './lib/health.mjs';
 
@@ -29,6 +30,8 @@ const g = readJsonFile(graphFile);
 const maxFiles = Number(args['max-files']) || 40;
 const wsDir = path.join(outDir, '.cache', 'worksheets');
 const descDir = path.join(outDir, 'descriptions');
+assertMapDirectory(wsDir);
+assertMapDirectory(descDir);
 fs.mkdirSync(wsDir, { recursive: true });
 fs.mkdirSync(descDir, { recursive: true });
 for (const f of fs.readdirSync(wsDir)) fs.unlinkSync(path.join(wsDir, f));
@@ -86,7 +89,8 @@ function source(p) {
   let text = null;
   const info = scanInfo.get(p);
   if (!g.meta?.blueprint && info?.category === 'code' && readable(info)) {
-    try { const t = fs.readFileSync(path.join(root, p), 'utf8'); if (!t.includes('\u0000')) text = maskSecrets(t.replace(/\r\n?/g, '\n'), info); } catch {}
+    const t = readProjectText(root, p, 512 * 1024);
+    if (t !== null && !t.includes('\u0000')) text = maskSecrets(t.replace(/\r\n?/g, '\n'), info);
   }
   sources.set(p, text);
   return text;
@@ -197,8 +201,8 @@ if (listed.size && !g.meta?.blueprint) {
   const PY_MODULE = /\bpython[\d.]*\s+(?:-\w+\s+)*-m\s+([A-Za-z_][\w.]*)/g;
   for (const f of scanFiles) {
     if ((f.category !== 'code' && f.category !== 'config') || !readable(f)) continue;
-    let text;
-    try { text = fs.readFileSync(path.join(root, f.path), 'utf8'); } catch { continue; }
+    const text = readProjectText(root, f.path, 512 * 1024);
+    if (text === null) continue;
     const hits = [...text.matchAll(FILE_TOKEN)].map((m) => [m[0], m.index]);
     const lineOf = lineIndex(text);
     for (const m of text.matchAll(PY_MODULE)) hits.push([m[1].replace(/\./g, '/') + '.py', m.index]);
@@ -214,6 +218,7 @@ const fence = (lines) => { const f = lines.some((l) => l.includes('```')) ? '~~~
 
 const index = [];
 for (const [nid, list] of byNode) {
+  if (typeof nid !== 'string' || !/^[\w.-]+$/.test(nid)) continue;
   list.sort((a, b) => a.p.localeCompare(b.p));
   // Split into parts of at most maxFiles files or ~100 routes, whichever comes first.
   const chunks = [[]];
@@ -282,7 +287,7 @@ changed: ${f.review}`);
       if (skipped.has(f.p)) out.push('  (code not quoted: this worksheet already quotes as much as it holds. Open the file if the digest leaves it unclear.)');
       out.push('');
     }
-    fs.writeFileSync(path.join(wsDir, `${key}.md`), out.join('\n'));
+    writeMapFile(path.join(wsDir, `${key}.md`), out.join('\n'));
 
     // skeleton: keep anything already written, add missing keys
     // (a file that holds something other than an object, or whose files or routes do, counts as empty)
@@ -298,7 +303,7 @@ changed: ${f.review}`);
       }
     }
     if (!Object.keys(skel.routes).length) delete skel.routes;
-    fs.writeFileSync(descFile, JSON.stringify(skel, null, 2) + '\n');
+    writeMapFile(descFile, JSON.stringify(skel, null, 2) + '\n');
     index.push({ key, node: n?.label || nid, nodeId: nid, part: parts > 1 ? i + 1 : null, parts, files: chunk.length, routes: routeCount, loc: chunk.reduce((s, f) => s + f.loc, 0),
       worksheet: toPosix(path.relative(root, path.join(wsDir, `${key}.md`))), descriptions: toPosix(path.relative(root, descFile)) });
   }

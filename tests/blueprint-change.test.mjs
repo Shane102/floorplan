@@ -30,7 +30,7 @@ async function served(replies, root) {
   const log = path.join(root, 'fake.log');
   const port = 20000 + Math.floor(Math.random() * 20000);
   const server = spawn(process.execPath, [path.join(root, 'floorplan', 'serve.mjs'), '--port', String(port), '--no-open'], {
-    cwd: root, env: { ...process.env, FLOORPLAN_NO_PROMPTS: '1', FLOORPLAN_ENGINE: '', FLOORPLAN_CLAUDE: FAKE, FAKE_LOG: log, FAKE_CHANGES: changes }, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: root, env: { ...process.env, FLOORPLAN_ENGINE: '', FLOORPLAN_CLAUDE: FAKE, FAKE_LOG: log, FAKE_CHANGES: changes }, stdio: ['ignore', 'pipe', 'pipe'],
   });
   servers.push(server);
   const base = await new Promise((resolve, reject) => {
@@ -100,7 +100,7 @@ test('a change is checked, saved and drawn, with what changed highlighted', asyn
   const [call] = s.calls();
   assert.ok(!call.args.join(' ').match(/\b(Edit|Write)\b/), 'the agent gets no editing tools');
   assert.match(call.args[call.args.indexOf('--append-system-prompt') + 1], /You change a blueprint/);
-  assert.equal(call.input, 'also plan out refunds');
+  assert.match(call.input, /^also plan out refunds\n\nMap context/);
 
   // undo puts the plan and the map back
   assert.deepEqual(await s.undo(), { ok: true, left: 0 });

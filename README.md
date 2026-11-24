@@ -5,31 +5,17 @@
   <img src="docs/images/logo-light.png" alt="Floorplan logo" height="88">
 </picture>
 
-# Floorplan
+# Floorplan (Shane102)
 
 **See how your app actually fits together.**
 
 Claude or Codex reads your codebase and draws an interactive map of it. Every part, file and web request gets a plain-English name, and every connection between them is shown.
 
-[![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-D97757?style=flat-square)](https://code.claude.com/docs/en/overview)
-[![Codex plugin](https://img.shields.io/badge/Codex-plugin-111?style=flat-square)](docs/codex.md)
-[![Tests](https://img.shields.io/github/actions/workflow/status/haydenschmitty/floorplan/test.yml?branch=main&style=flat-square&label=tests)](https://github.com/haydenschmitty/floorplan/actions/workflows/test.yml)
-[![Version](https://img.shields.io/badge/version-0.11.0-111?style=flat-square)](CHANGELOG.md)
-[![License: MIT](https://img.shields.io/badge/license-MIT-111?style=flat-square)](LICENSE)
-[![Node 18+](https://img.shields.io/badge/node-%E2%89%A518-111?style=flat-square)](https://nodejs.org)
-[![Zero dependencies](https://img.shields.io/badge/dependencies-0-111?style=flat-square)](#how-it-works)
+[Version 0.11.0](CHANGELOG.md) · [MIT license](LICENSE)
 
-<a href="https://trendshift.io/repositories/322616"><img src="https://trendshift.io/api/badge/trendshift/repositories/322616/daily?language=JavaScript" alt="Floorplan on Trendshift" width="250" height="55"></a>
-
-**[Try the live demo](https://haydenschmitty.github.io/floorplan-demo/)** · [Watch the video](https://youtu.be/NTUUzC7L_NQ) · [Install](#install) · [Quick start](#quick-start) · [Compared](#floorplan-archify-or-understand-anything) · [Features](#features) · [See it in action](#see-it-in-action) · [How it works](#how-it-works) · [Docs](docs/README.md) · [FAQ](#faq)
+[Install](#install) · [Quick start](#quick-start) · [Features](#features) · [Screenshots](#see-it-in-action) · [How it works](#how-it-works) · [Docs](docs/README.md) · [FAQ](#faq)
 
 </div>
-
-<p align="center">
-  <a href="https://youtu.be/NTUUzC7L_NQ"><img src="docs/images/video.jpg" alt="Watch the walkthrough on YouTube: installing Floorplan, then a tour of the map of Brewline, a coffee subscription app" width="100%"></a>
-</p>
-<p align="center"><sub>▶ <a href="https://youtu.be/NTUUzC7L_NQ">Watch the walkthrough</a>: installing Floorplan, then a tour of Brewline, a demo coffee-subscription app built across four repos.</sub></p>
-<p align="center"><b><a href="https://haydenschmitty.github.io/floorplan-demo/">Try the live demo →</a></b> Explore the Brewline map in your browser, no install needed.</p>
 
 ## Why Floorplan?
 
@@ -126,8 +112,6 @@ Floorplan is made for mapping code you already have. It can also start from a PR
 
 ## See it in action
 
-Want to click around yourself? Open the [live demo](https://haydenschmitty.github.io/floorplan-demo/): the real Brewline map beside a scripted conversation, in Claude Code or Codex.
-
 <table>
 <tr>
 <td width="50%" valign="top">
@@ -163,15 +147,15 @@ Want to click around yourself? Open the [live demo](https://haydenschmitty.githu
 
 ## Install
 
-You need [Node.js 18+](https://nodejs.org) and either Claude Code or Codex. Floorplan runs on the plan you already have, with no API keys.
+You need Node.js 18 or newer and either Claude Code or Codex. The marketplace for this fork is named `floorplan-shane102`. [Node.js](https://nodejs.org)
 
 ### Claude Code
 
 In the desktop app's Code tab or the CLI:
 
 ```bash
-claude plugin marketplace add haydenschmitty/floorplan
-claude plugin install floorplan@floorplan
+claude plugin marketplace add Shane102/floorplan
+claude plugin install floorplan@floorplan-shane102
 ```
 
 Start a new session and it's ready. Installing the Claude Code CLI is recommended even if you use the desktop app, because it lets the map's Ask bar read your real code. More in [Getting started](docs/getting-started.md).
@@ -181,14 +165,14 @@ Start a new session and it's ready. Installing the Claude Code CLI is recommende
 Signed in with ChatGPT. No terminal needed:
 
 1. In the Codex app, open **Plugins** and choose **Add a marketplace**.
-2. For **Source**, enter `haydenschmitty/floorplan` and click **Add marketplace**.
-3. Find **Floorplan** and click **+** to install it.
+2. For **Source**, enter `Shane102/floorplan` and click **Add marketplace**.
+3. Find **Floorplan (Shane102)** and click **+** to install it.
 
 Or, from a terminal:
 
 ```bash
-codex plugin marketplace add haydenschmitty/floorplan
-codex plugin add floorplan@floorplan
+codex plugin marketplace add Shane102/floorplan
+codex plugin add floorplan@floorplan-shane102
 ```
 
 Start a new chat and ask for a floorplan, or type `$floorplan`. The map's Ask bar runs on your own Codex sign-in, with no API key. More in [Floorplan in Codex](docs/codex.md).
@@ -251,8 +235,8 @@ A `floorplan/` folder holding the map. In Claude Code, if you say yes, it also a
 - The scan, the map and its small local server all run on your computer. The server only accepts connections from your own machine.
 - No dependencies or install scripts, and the map works offline: its layout engine and fonts are built in.
 - Questions on the map go to your own account, through the Claude Code CLI or Codex, which can read your code but not change it.
-- The Health check never stores or shows secret values, only where they are.
-- No analytics or tracking. The map may ask once whether you'd like an email when Floorplan Cloud launches. Nothing is sent unless you sign up, and then only your email and "just me" or "with my team".
+- The Health check records the location and a masked hint when it recognizes a secret.
+- Floorplan's viewer and local server make no background requests to external services.
 
 More in [Privacy and security](docs/privacy-and-security.md). Wondering whether a plugin is safe to install? [Is it safe to install?](docs/is-it-safe.md) lists everything Floorplan does on your computer, how a test checks that on every change, and how to verify your copy.
 
@@ -276,13 +260,13 @@ More in [Privacy and security](docs/privacy-and-security.md). Wondering whether 
 <details>
 <summary><b>Is it safe to install?</b></summary>
 
-Floorplan has no hooks, no MCP servers and no dependencies, downloads nothing, and never runs code from the internet. Its only outside request is the opt-in waitlist. A test checks all of that on every change, and every release lists a fingerprint of each file so you can confirm your installed copy is the real thing. Everything is in [Is it safe to install?](docs/is-it-safe.md).
+The plugin has no hooks, MCP servers, package dependencies or install scripts. The supply-chain tests check for changes to how the plugin runs, and `CHECKSUMS.txt` lets you compare an installation with the repository. [Is it safe to install?](docs/is-it-safe.md)
 </details>
 
 <details>
 <summary><b>Does my code leave my computer?</b></summary>
 
-Only the way Claude Code and Codex always work: the AI reads the files it needs to describe your app, through your own account. The map itself is a local file and its server only listens on your machine. If you choose to open the map in the Claude app instead, Claude uploads the map (names, descriptions and structure, not your source code) to your private claude.ai account, and asks first. The one thing Floorplan itself ever sends is your email, and only if you sign up for the [Floorplan Cloud waitlist](docs/privacy-and-security.md#floorplan-cloud-waitlist).
+When Claude Code or Codex describes your project or answers a question, the agent can send file contents through your account. The generated map stays local unless you share it or choose to publish it to the Claude app. [Privacy and security](docs/privacy-and-security.md)
 </details>
 
 <details>
@@ -333,19 +317,10 @@ Yes. Point it at a monorepo, a subfolder of one, or a plain folder that holds se
 Archify draws diagrams of anything, and Understand Anything builds a developer's knowledge graph of a codebase. Floorplan maps the app you built, in plain English, and tells you what's risky and what your AI just changed. See [Floorplan, Archify or Understand Anything?](#floorplan-archify-or-understand-anything)
 </details>
 
-## Star history
-
-<a href="https://star-history.com/#haydenschmitty/floorplan&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=haydenschmitty/floorplan&type=Date&theme=dark">
-    <img src="https://api.star-history.com/svg?repos=haydenschmitty/floorplan&type=Date" alt="Floorplan's GitHub stars over time" width="100%">
-  </picture>
-</a>
-
 ## Contributing
 
 Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and [Developing Floorplan](docs/development.md).
 
 ## License
 
-[MIT](LICENSE) © 2026 [Hayden Smith](https://github.com/haydenschmitty)
+This fork builds on Floorplan, originally created by Hayden Smith. Copyright © 2026 Hayden Smith. [MIT license](LICENSE)

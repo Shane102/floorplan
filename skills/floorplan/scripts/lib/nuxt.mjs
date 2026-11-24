@@ -4,9 +4,8 @@
 // there, those two files are read (only those: .nuxt/ itself is never part of the map). Without them, Nuxt's
 // own conventions are followed: components/ (named with their folder prefixes), composables/ and utils/.
 // Matching is by name, so a name the file defines or imports itself is left alone.
-import fs from 'node:fs';
 import path from 'node:path';
-import { blankBlockComments } from './common.mjs';
+import { blankBlockComments, readProjectText } from './common.mjs';
 
 const CONFIG = /(^|\/)nuxt\.config\.(ts|js|mjs|cjs|mts)$/;
 const MAX_LIST_BYTES = 4 * 1024 * 1024;
@@ -49,8 +48,7 @@ function nuxtApps(root, files) {
     const dir = posix.dirname(f.path) === '.' ? '' : posix.dirname(f.path);
     const under = (d) => (d ? d + '/' : '');
     let src = dir;
-    let config = '';
-    try { config = fs.readFileSync(path.join(root, f.path), 'utf8').slice(0, 200000); } catch { /* unreadable: use the defaults */ }
+    const config = readProjectText(root, f.path, MAX_SOURCE_BYTES)?.slice(0, 200000) ?? '';
     const srcDir = /\bsrcDir\s*:\s*['"]([^'"\n]{1,200})['"]/.exec(config)?.[1];
     if (srcDir) src = posix.normalize(posix.join(dir, srcDir.replace(/^\.\//, ''))).replace(/\/$/, '').replace(/^\.$/, '');
     else if (files.some((x) => x.path.startsWith(under(dir) + 'app/') && /^(pages|components|composables|layouts)\//.test(x.path.slice(under(dir).length + 4)))) src = under(dir) + 'app';
@@ -58,14 +56,6 @@ function nuxtApps(root, files) {
   }
   // the innermost app owns a file
   return apps.sort((a, b) => b.dir.length - a.dir.length);
-}
-
-function readList(file) {
-  try {
-    const st = fs.statSync(file);
-    if (!st.isFile() || st.size > MAX_LIST_BYTES) return null;
-    return fs.readFileSync(file, 'utf8');
-  } catch { return null; }
 }
 
 /** A path from a .nuxt/*.d.ts, as one of the scanned files (or null for a package or a file not on the map). */
@@ -79,8 +69,8 @@ function target(app, spec, known) {
 
 /** The name → file lists Nuxt wrote, or null where the file isn't there. */
 function generatedLists(root, app, known) {
-  const comps = readList(path.join(root, app.dir, '.nuxt', 'components.d.ts'));
-  const imps = readList(path.join(root, app.dir, '.nuxt', 'imports.d.ts'));
+  const comps = readProjectText(root, posix.join(app.dir, '.nuxt/components.d.ts'), MAX_LIST_BYTES);
+  const imps = readProjectText(root, posix.join(app.dir, '.nuxt/imports.d.ts'), MAX_LIST_BYTES);
   let components = null, functions = null;
   if (comps != null) {
     components = new Map();
@@ -174,8 +164,8 @@ export function nuxtAutoImports(root, files) {
       // server code has Nitro's auto-imports, not the app's
       if (/^server\//.test(f.path.slice(inApp.length)) || /\.d\.ts$/.test(f.path) || CONFIG.test(f.path)) continue;
       if (!f.bytes || f.bytes > MAX_SOURCE_BYTES) continue;
-      let src;
-      try { src = fs.readFileSync(path.join(root, f.path), 'utf8'); } catch { continue; }
+      const src = readProjectText(root, f.path, MAX_SOURCE_BYTES);
+      if (src === null) continue;
       const code = uncomment(src);
       const own = ownNames(code);
       const uses = new Map(); // to -> Set(names)

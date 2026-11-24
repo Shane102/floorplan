@@ -11,7 +11,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { git, compileGlob, blockComments, blankBlockComments, forwardIndexOf, callArgs } from './common.mjs';
+import { git, compileGlob, blockComments, blankBlockComments, forwardIndexOf, callArgs, projectFile, readProjectText } from './common.mjs';
 import { csRoutes, csCors, csStripeEvents, csStripeVerified, csBuildContext, csFinding } from './health-csharp.mjs';
 import { stripPhp, phpBare, phpBrackets, phpBudget, phpParts, phpSplit, phpStr, phpArrayBody, phpNamed, phpPairs } from './extract.mjs';
 
@@ -1407,7 +1407,7 @@ export function buildHealth({ graph, scan, arch, root }) {
     if (TEST_FILE.test(f.path) || EXAMPLE_FILE.test(f.path) || /\.pub$/.test(base)) continue;
     if (!/\.(pem|key|p12|pfx|jks|keystore)$|^id_(rsa|dsa|ecdsa|ed25519)$|service[-_]?account.*\.json$|^credentials?\.json$|firebase-adminsdk.*\.json$|^client_secret.*\.json$|-key\.json$/i.test(base)) continue;
     let head = '';
-    try { head = readHead(path.join(root, f.path), 65536); } catch { continue; }
+    try { head = readHead(root, f.path, 65536); } catch { continue; }
     if (plainKeyIn(head) || /"private_key"\s*:\s*"-----|"client_secret"\s*:\s*"[^"]{8,}/.test(head) || /\.(p12|pfx|jks|keystore)$/i.test(base)) secretFiles.push({ path: f.path, list: [{ k: 'secret', line: 1, what: 'a credentials file (a private key that logs in as your app)', sev: 'high', hint: 'whole file' }], file: true });
   }
   const secretIssue = (group) => {
@@ -1462,7 +1462,7 @@ export function buildHealth({ graph, scan, arch, root }) {
     const base = f.path.split('/').pop();
     if (!/^\.env(\.[\w.-]+)?$/i.test(base) || /example|sample|template|dist|defaults?|schema|test/i.test(base)) continue;
     let src = '';
-    try { src = readHead(path.join(root, f.path), 262144); } catch { continue; }
+    try { src = readHead(root, f.path, 262144); } catch { continue; }
     const secretVars = [];
     src.split('\n').forEach((t, i) => {
       const m = /^\s*(?:export\s+)?([A-Za-z_][\w.]*)\s*=\s*["']?([^"'#\s]*)/.exec(t);
@@ -1504,7 +1504,7 @@ export function buildHealth({ graph, scan, arch, root }) {
     const base = f.path.split('/').pop();
     if (!/^\.env(\.[\w.-]+)?$/i.test(base) || /example|sample|template|dist|schema/i.test(base) || !live(f.path)) continue;
     let src = '';
-    try { src = readHead(path.join(root, f.path), 262144); } catch { continue; }
+    try { src = readHead(root, f.path, 262144); } catch { continue; }
     src.split('\n').forEach((t, i) => {
       const m = /^\s*(?:export\s+)?([A-Z][A-Z0-9_]*)\s*=\s*["']?([^"'#\s]*)/.exec(t);
       if (!m || !m[2] || leakyPublicVar(m[1]) === null) return;
@@ -1668,7 +1668,7 @@ export function buildHealth({ graph, scan, arch, root }) {
     const base = f.path.split('/').pop();
     if (!live(f.path) || !(/\.rules$/i.test(base) || /^database(\.[\w-]+)?\.rules\.json$/i.test(base))) continue;
     let src = '';
-    try { src = readHead(path.join(root, f.path), 262144); } catch { continue; }
+    try { src = readHead(root, f.path, 262144); } catch { continue; }
     const rtdb = /\.json$/i.test(base);
     const service = rtdb ? 'Realtime Database' : /service\s+firebase\.storage/.test(src) ? 'Storage' : /service\s+cloud\.firestore/.test(src) ? 'Firestore' : null;
     if (!service) continue;
@@ -1811,8 +1811,7 @@ export function buildHealth({ graph, scan, arch, root }) {
     if (file === helper) return true;
     let src = routeImports.get(file);
     if (src === undefined) {
-      try { src = fs.readFileSync(path.join(root, file), 'utf8'); }
-      catch { src = ''; }
+      src = readProjectText(root, file) ?? '';
       routeImports.set(file, src);
     }
     const moduleName = helper.replace(/\.py$/, '').replace(/\//g, '.');
@@ -1882,7 +1881,7 @@ export function buildHealth({ graph, scan, arch, root }) {
   for (const r of scan.routes || []) if (r.framework === 'laravel') routeFinding.set(`${r.file}|${r.line}|${r.method}`, laravelFinding(r));
   const sourceOf = new Map();
   const readSource = (p) => {
-    if (!sourceOf.has(p)) { let src = ''; try { src = readHead(path.join(root, p), 262144); } catch { /* unreadable: nothing to go on */ } sourceOf.set(p, src); }
+    if (!sourceOf.has(p)) { let src = ''; try { src = readHead(root, p, 262144); } catch { /* unreadable: nothing to go on */ } sourceOf.set(p, src); }
     return sourceOf.get(p);
   };
   // Serverless Framework: an authorizer (or API key) on the event in serverless.yml checks the caller before the
@@ -2136,8 +2135,8 @@ export function buildHealth({ graph, scan, arch, root }) {
     const mentioned = new Set();
     for (const f of scan.files) {
       if (!['code', 'config', 'docs'].includes(f.category) || f.tooLarge) continue;
-      let src;
-      try { src = fs.readFileSync(path.join(root, f.path), 'utf8'); } catch { continue; }
+      const src = readProjectText(root, f.path);
+      if (src === null) continue;
       for (const tok of new Set(src.match(/[\w$-]+/g) || [])) { const p = want.get(tok); if (p && p !== f.path) mentioned.add(p); }
       // a dotted name (users.service, from './users/users.service.js'), which the words above split at the dot
       if (dotted) for (const tok of new Set(src.match(/[\w$-]+(?:\.[\w$-]+)+/g) || [])) {
@@ -2328,8 +2327,10 @@ function firebaseRtdbRules(src, now) {
   return out;
 }
 
-function readHead(file, max) {
-  const fd = fs.openSync(file, 'r');
+function readHead(root, relative, max) {
+  const entry = projectFile(root, relative);
+  if (!entry) return '';
+  const fd = fs.openSync(entry.file, 'r');
   try { const buf = Buffer.alloc(max); const n = fs.readSync(fd, buf, 0, max, 0); return buf.subarray(0, n).toString('utf8'); } finally { fs.closeSync(fd); }
 }
 function stemOf(p) {
